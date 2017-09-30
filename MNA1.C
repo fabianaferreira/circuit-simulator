@@ -31,6 +31,8 @@ O amplificador operacional ideal tem a saida suspensa
 Os nos podem ser nomes
 */
 
+/*TESTE*/
+
 #define versao "1.0j - 26/11/2015"
 #include <stdio.h>
 #include <conio.h>
@@ -105,7 +107,7 @@ int resolversistema(void)
       Yn[i][j]/= t;
       p=Yn[i][j];
       if (p!=0)  /* Evita operacoes com zero */
-        for (l=1; l<=nv; l++) {  
+        for (l=1; l<=nv; l++) {
 	  if (l!=i)
 	    Yn[l][j]-=Yn[l][i]*p;
         }
@@ -360,4 +362,3 @@ int main(void)
   getch();
   return 0;
 }
-
