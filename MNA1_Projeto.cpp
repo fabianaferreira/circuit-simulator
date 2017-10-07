@@ -199,7 +199,7 @@ int main(void)
     p=txt+strlen(netlist[ne].nome); /* Inicio dos parametros */
     /* O que e lido depende do tipo */
 
-    /*RESISTOR OU FONTE DE CORRENTE DC OU FONTE DE TENSAO DC*/
+    /*RESISTOR*/
     if (tipo=='R')
     {
       sscanf(p,"%10s%10s%lg",na,nb,&netlist[ne].valor);
@@ -208,6 +208,12 @@ int main(void)
       netlist[ne].b=numero(nb);
     }
 
+    /*
+      No caso de fontes de tensao ou de corrente, precisamos identificar qual tipo de fonte
+      para que possamo pegar os valores corretos, como amplitude e frequencia, no caso de fontes
+      não constantes. Para tanto, sao usadas tres structs, que passam a ser atributos do struct elemento
+    */
+    
     if (tipo == 'I' || tipo == 'V')
     {
       sscanf(p,"%10s%10s%5s",na,nb,netlist[ne].tipo_fonte);
