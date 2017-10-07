@@ -69,6 +69,7 @@ typedef struct pulse /* CLASSE PULSE */
   unsigned int ciclos;
 } pulse;
 
+/*Elemento possui atributos de fontes, pois há tipos diferentes, com parametros diferentes*/
 typedef struct elemento /* Elemento do netlist */
 {
   char nome[MAX_NOME];
@@ -79,6 +80,11 @@ typedef struct elemento /* Elemento do netlist */
   dc fonte_dc;
   pulse fonte_pulso;
 } elemento;
+
+/*As seguintes variaveis vao definir os passos e o tempo de simulacao a ser usado
+  Como o passo a ser escrito no arquivo de saida pode nao ser o mesmo do passo da
+  integracao, vamos definir os dois separadamente*/
+double tempo_simulacao, passo_simulacao, passo_saida
 
 elemento netlist[MAX_ELEM]; /* Netlist */
 
@@ -213,7 +219,6 @@ int main(void)
       para que possamo pegar os valores corretos, como amplitude e frequencia, no caso de fontes
       não constantes. Para tanto, sao usadas tres structs, que passam a ser atributos do struct elemento
     */
-    
     if (tipo == 'I' || tipo == 'V')
     {
       sscanf(p,"%10s%10s%5s",na,nb,netlist[ne].tipo_fonte);
@@ -270,6 +275,15 @@ int main(void)
       printf("Comentario: %s",txt);
       ne--;
     }
+
+    /*Atribuindo os valores dos passos de integracao e de escrita no arquivo de saida,
+      alem do tempo total de simulacao definido no netlist*/
+    else if (tipo == ".TRAN")
+    {
+      sscanf(p, "%lg%lg%*10s%lg", &tempo_simulacao, &passo_simulacao, &passo_saida);
+      printf("%lg %lg %lg\n", tempo_simulacao, passo_simulacao, passo_saida);
+    }
+
     else
     {
       printf("Elemento desconhecido: %s\n",txt);
