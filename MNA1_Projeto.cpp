@@ -83,11 +83,6 @@ typedef struct elemento /* Elemento do netlist */
   dc fonte_dc;
   pulse fonte_pulso;
 } elemento;
-/*As seguintes variaveis vao definir os passos e o tempo de simulacao a ser usado
-  Como o passo a ser escrito no arquivo de saida pode nao ser o mesmo do passo da
-  integracao, vamos definir os dois separadamente*/
-double tempo_simulacao, passo_simulacao, passo_saida;
-double tempo_atual;
 
 /*As seguintes variaveis vao definir os passos e o tempo de simulacao a ser usado
   Como o passo a ser escrito no arquivo de saida pode nao ser o mesmo do passo da
@@ -96,6 +91,7 @@ double tempo_simulacao, passo_simulacao, passo_saida;
 double tempo_atual;
 
 elemento netlist[MAX_ELEM]; /* Netlist */
+int fontes_variantes[MAX_ELEM];
 
 int
   numeroElementos, /* Elementos */
@@ -118,9 +114,11 @@ double
   g,
   Yn[MAX_NOS+1][MAX_NOS+2];
 
-void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
+/**/
+/*Pega apenas as fontes variantes do netlist e monta a estampa de acordo com o tempo atual da simulacao*/
+void MontarEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
 {
-  unsigned contador, ciclos;
+  unsigned contador, ciclos, ciclos_passados;
   unsigned quantidade_fontes = sizeof(fontes_variantes)/sizeof(fontes_variantes[0]);
   elemento fonte_atual;
   double amplitude,
@@ -134,7 +132,8 @@ void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
          tempo_subida,
          tempo_descida,
          tempo_ligada,
-         periodo;
+         periodo,
+         tempo_normalizado;
     double coefAng,
            coefLin,
            t1,
@@ -153,7 +152,7 @@ void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
       nivel_dc = fonte_atual.fonte_seno.nivel_dc;
       ciclos = fonte_atual.fonte_seno.ciclos;
       fonte_atual.valor = nivel_dc +
-                          amplitude*(exp(-amortecimento*(tempo_atual - atraso)))*(sin(2*PI*(tempo_atual - atraso) + (PI*defasagem)/180));
+                          amplitude*(exp(-amortecimento*(tempo - atraso)))*(sin(2*PI*(tempo - atraso) + (PI*defasagem)/180));
       /*A estampa da fonte para um tempo fixo é igual a uma fonte DC*/
       Yn[fonte_atual.a][fonte_atual.x]+=1;
       Yn[fonte_atual.b][fonte_atual.x]-=1;
@@ -172,6 +171,7 @@ void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
       ciclos = fonte_atual.fonte_pulso.ciclos;
       periodo = fonte_atual.fonte_pulso.periodo;
       tempo_ligada = fonte_atual.fonte_pulso.tempo_ligada;
+      ciclos_passados = unsigned(tempo/periodo);
 
       /*Tratando descontinuidades*/
       if (tempo_subida == 0)
@@ -179,12 +179,14 @@ void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
       if (tempo_descida == 0)
         tempo_subida = passo_simulacao;
 
+      tempo_normalizado = tempo - periodo*ciclos_passados;
       /*Falta o que fazer quando tá terminando*/
-      /*Como usar o periodo e os ciclos?*/
       /*Achando o valor da fonte no tempo atual*/
-      if (tempo <= atraso)
+      if (ciclos_passados >= ciclos)
         fonte_atual.valor = amplitude1;
-      else if (tempo <= tempo_subida)
+      else if (tempo_normalizado <= atraso)
+        fonte_atual.valor = amplitude1;
+      else if (tempo_normalizado <= tempo_subida + atraso)
       {
         /*Achando a equacao da reta de subida*/
         t1 = atraso;
@@ -193,14 +195,14 @@ void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
         coefLin = amplitude1 - coefAng*t1;
         fonte_atual.valor = coefAng*tempo + coefLin; /*????????????*/
       }
-      else if (tempo <= tempo_ligada)
+      else if (tempo_normalizado <= atraso + tempo_subida + tempo_ligada)
         fonte_atual.valor = amplitude2;
-      else if (tempo <= tempo_descida)
+      else if (tempo_normalizado <= periodo)
       {
         /*Achando a equacao da reta de descida*/
         t1 = atraso + tempo_subida + tempo_ligada;
         t2 = t1 + tempo_descida;
-        coefAng = (amplitude2 - amplitude1)/(t2 - t1);
+        coefAng = (amplitude1 - amplitude2)/(t1 - t2);
         coefLin = amplitude1 - coefAng*t1;
         fonte_atual.valor = coefAng*tempo + coefLin; /*????????????*/
       }
@@ -212,7 +214,6 @@ void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
       Yn[fonte_atual.x][numeroVariaveis+1]-=fonte_atual.valor;
     }/*pulse*/
   }/*for*/
-
 }
 
 /*  Rotina para Resolucao de sistema de equacoes lineares.
@@ -393,6 +394,7 @@ void MontarEstampasPontoOp()
 
 int main(void)
 {
+  contador_fontes_variantes = 0;
   system("cls");
   printf("Programa demonstrativo de analise nodal modificada no dominio do tempo\n\n");
   printf("Desenvolvido por: - Fabiana Ferreira Fonseca \n");
@@ -476,6 +478,8 @@ int main(void)
                 &netlist[numeroElementos].fonte_seno.amplitude, &netlist[numeroElementos].fonte_seno.freq,
                 &netlist[numeroElementos].fonte_seno.atraso, &netlist[numeroElementos].fonte_seno.amortecimento,
                 &netlist[numeroElementos].fonte_seno.defasagem, &netlist[numeroElementos].fonte_seno.ciclos);
+        fontes_variantes[contador_fontes_variantes] = numeroElementos;
+        contador_fontes_variantes++;
       }
       else if (strcmp(netlist[numeroElementos].tipo_fonte, "PULSE") == 0)
       {
@@ -485,6 +489,8 @@ int main(void)
                 &netlist[numeroElementos].fonte_pulso.tempo_subida, &netlist[numeroElementos].fonte_pulso.tempo_descida,
                 &netlist[numeroElementos].fonte_pulso.tempo_ligada, &netlist[numeroElementos].fonte_pulso.periodo,
                 &netlist[numeroElementos].fonte_pulso.ciclos);
+        fontes_variantes[contador_fontes_variantes] = numeroElementos;
+        contador_fontes_variantes++;
       }
       netlist[numeroElementos].a=NumerarNo(na);
       netlist[numeroElementos].b=NumerarNo(nb);
@@ -636,6 +642,7 @@ int main(void)
   }
   /* Montar Estampas para análise de Ponto de Operação */
   MontarEstampasPontoOp();
+  MontarEstampasVariantes(fontes_variantes, 0);
   /* Resolve o sistema */
   if (ResolverSistema())
   {
@@ -649,10 +656,7 @@ int main(void)
       sendo feita, mas, a partir daqui, iremos montar as estampas dependentes e resolver o sistema*/
     for (tempo_atual = 0; tempo_atual < tempo_simulacao; tempo_atual += passo_simulacao)
     {
-      /*Vou definir uma funcao que vai alterar as estampas dos elementos variantes no tempo.
-        Vai ser criado um vetor que, ao ler da netlist, vai conter os elementos que variam no
-        tempo (no caso inicial, as fontes), para que, ao montar as estampas de tempos em tempos,
-        o processo seja otimizado e não monte as estampas dos elementos que não sofrem variacao*/
+
     }
 
 #ifdef DEBUG
