@@ -33,12 +33,14 @@ Os nos podem ser nomes
 #include <stdlib.h>
 #include <ctype.h>
 #include <math.h>
+
 #define MAX_LINHA 80
 #define MAX_TIPO_FONTE  5
 #define MAX_NOME 11
 #define MAX_ELEM 50
 #define MAX_NOS 50
 #define TOLG 1e-9
+#define PI acos(-1.0)
 #define DEBUG
 
 typedef struct sine /* CLASSE SIN */
@@ -89,6 +91,8 @@ double tempo_atual;
 
 elemento netlist[MAX_ELEM]; /* Netlist */
 
+unsigned elementos_variantes [MAX_ELEM]; /*posicao no vetor netlist das fontes variantes*/
+
 int
   ne, /* Elementos */
   nv, /* Variaveis */
@@ -109,6 +113,71 @@ FILE *arquivo;
 double
   g,
   Yn[MAX_NOS+1][MAX_NOS+2];
+
+void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
+{
+  unsigned contador;
+  unsigned quantidade_fontes = sizeof(fontes_variantes)/ sizeof(fontes_variantes[0]);
+  elemento fonte_atual;
+  for (contador = 0; contador < quantidade_fontes; contador++)
+  {
+    double amplitude,
+           amplitude1,
+           amplitude2,
+           nivel_dc,
+           atraso,
+           freq,
+           defasagem,
+           amortecimento,
+           tempo_subida,
+           tempo_descida,
+           tempo_ligada,
+           periodo;
+    unsigned ciclos;
+    fonte_atual = fontes_variantes[contador];
+    if (strcmp(fonte_atual.tipo_fonte, "SIN") == 0)
+    {
+      /*Como usar os ciclos????*/
+      amplitude = fonte_atual.fonte_seno.amplitude;
+      freq = fonte_atual.fonte_seno.freq;
+      atraso = fonte_atual.fonte_seno.atraso;
+      defasagem = fonte_atual.fonte_seno.defasagem;
+      nivel_dc = fonte_atual.fonte_seno.nivel_dc;
+      ciclos = fonte_atual.fonte_seno.ciclos;
+      fonte_atual.valor = nivel_dc +
+                          amplitude*(exp(-amortecimento*(tempo_atual - atraso)))*(sin(2*PI*(tempo_atual - atraso) + (PI*defasagem)/180));
+    }
+    else if (strcmp(fonte_atual.tipo_fonte, "PULSE") == 0)
+    {
+      amplitude1 = fonte_atual.fonte_pulso.amplitude1;
+      amplitude2 = fonte_atual.fonte_pulso.amplitude2;
+      atraso = fonte_atual.fonte_pulso.atraso;
+      tempo_subida = fonte_atual.fonte_pulso.tempo_subida;
+      tempo_descida = fonte_atual.fonte_pulso.tempo_descida;
+      ciclos = fonte_atual.fonte_pulso.ciclos;
+      periodo = fonte_atual.fonte_pulso.periodo;
+      tempo_ligada = fonte_atual.fonte_pulso.tempo_ligada;
+
+      /*Tratando descontinuidades*/
+      if (tempo_subida == 0)
+        tempo_descida = passo_simulacao;
+      if (tempo_descida == 0)
+        tempo_subida = passo_simulacao;
+
+      /*Falta o que fazer quando tá terminando*/
+      /*Como usar o periodo e os ciclos?*/
+      /*Achando o valor da fonte no tempo atual*/
+      if (tempo <= atraso)
+        fonte_atual.valor = amplitude1;
+      else if (tempo <= tempo_subida)
+        fonte_atual.valor = amplitude2*tempo_subida; /*?????????*/
+      else if (tempo <= tempo_ligada)
+        fonte_atual.valor = amplitude2;
+      else if (tempo <= tempo_descida)
+        fonte_atual.valor = amplitude1;
+    }/*pulse*/
+  }/*for*/
+}
 
 /* Resolucao de sistema de equacoes lineares.
    Metodo de Gauss-Jordan com condensacao pivotal */
@@ -248,6 +317,8 @@ int main(void)
                 &netlist[ne].fonte_pulso.tempo_ligada, &netlist[ne].fonte_pulso.periodo,
                 &netlist[ne].fonte_pulso.ciclos);
       }
+      netlist[ne].a=numero(na);
+      netlist[ne].b=numero(nb);
     }
 
     /*FONTES CONTROLADAS*/
