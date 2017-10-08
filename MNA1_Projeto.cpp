@@ -382,6 +382,8 @@ int main(void)
                 &netlist[numeroElementos].fonte_pulso.tempo_ligada, &netlist[numeroElementos].fonte_pulso.periodo,
                 &netlist[numeroElementos].fonte_pulso.ciclos);
       }
+      netlist[numeroElementos].a=NumerarNo(na);
+      netlist[numeroElementos].b=NumerarNo(nb);
     }
 
     /*FONTES CONTROLADAS*/
