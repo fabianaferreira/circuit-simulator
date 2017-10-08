@@ -112,7 +112,7 @@ FILE *arquivo;
 
 double
   g,
-  Yn[MAX_NOS+1][MAX_NOS+2];
+  Yn[MAX_NOS+1][MAX_NOS+2] ;
 
 void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
 {
