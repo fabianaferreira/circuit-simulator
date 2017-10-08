@@ -454,7 +454,7 @@ int main(void)
         Vai ser criado um vetor que, ao ler da netlist, vai conter os elementos que variam no
         tempo (no caso inicial, as fontes), para que, ao montar as estampas de tempos em tempos,
         o processo seja otimizado e não monte as estampas dos elementos que não sofrem variacao*/
-        /*Teste branch git*/
+        /*Teste branch git */
     }
 
     #ifdef DEBUG
