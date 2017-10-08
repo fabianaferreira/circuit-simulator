@@ -43,6 +43,7 @@ Os nos podem ser nomes
 #define TOLG 1e-9
 #define DEBUG
 #define PI acos(-1.0)
+#define NOME_ARQUIVO_SAIDA "saida_simulacao.txt"
 
 typedef struct sine /* CLASSE SIN */
 {
@@ -394,7 +395,8 @@ void MontarEstampasPontoOp()
 
 int main(void)
 {
-  contador_fontes_variantes = 0;
+
+  unsigned contador_fontes_variantes = 0;
   system("cls");
   printf("Programa demonstrativo de analise nodal modificada no dominio do tempo\n\n");
   printf("Desenvolvido por: - Fabiana Ferreira Fonseca \n");
@@ -649,15 +651,42 @@ int main(void)
     getch();
     exit(0);
   }
-    /*Agora, precisamos fazer a analise no tempo. Porem, as fontes SINE e PULSE tem valores
-      que dependem do tempo de simulacao e do passo de integracao. Assim, as estampas das mesmas
-      tem que ser montadas dentro de um loop que ira resolver o sistema para cada tempo diferente.
-      Dessa forma, todas as estampas que nao dependem do tempo podem ser montadas antes, como esta
-      sendo feita, mas, a partir daqui, iremos montar as estampas dependentes e resolver o sistema*/
-    for (tempo_atual = 0; tempo_atual < tempo_simulacao; tempo_atual += passo_simulacao)
-    {
 
+  FILE *arquivoSaida = fopen(NOME_ARQUIVO_SAIDA, "w");
+  /*Escreve o header do arquivo de saida*/
+  strcpy(txt,"");
+  fprintf("%s", "t");
+  for (i=1; i<=numeroVariaveis; i++)
+  {
+    if (i==numeroNos+1) strcpy(txt,"j");
+    fprintf(" %s%i", txt, lista[i]);
+  }
+  fprintf("\n");
+
+  /*Analise no tempo*/
+  for (tempo_atual = 0; tempo_atual < tempo_simulacao; tempo_atual += passo_simulacao)
+  {
+    MontarEstampasVariantes(fontes_variantes, tempo_atual);
+
+    /*Newton-Raphson para tempo atual com o ResolverSistema() varias vezes ate convergir*/
+
+    /* Resolve o sistema */
+    if (ResolverSistema())
+    {
+      getch();
+      exit(0);
     }
+    /*Escreve no arquivo de saida*/
+    fprintf("%lg", tempo_atual);
+    for (i=1; i<=numeroVariaveis; i++)
+    {
+      fprintf(" %lg", Yn[i][numeroVariaveis+1]);
+    }
+    fprintf("\n");
+  }/*for analise no tempo*/
+
+  /*Fecha arquivo*/
+  fclose(arquivoSaida);
 
 #ifdef DEBUG
   /* Opcional: Mostra o sistema resolvido */
