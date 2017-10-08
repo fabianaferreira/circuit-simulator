@@ -120,24 +120,28 @@ double
 
 void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
 {
-  unsigned contador;
-  unsigned quantidade_fontes = sizeof(fontes_variantes)/ sizeof(fontes_variantes[0]);
+  unsigned contador, ciclos;
+  unsigned quantidade_fontes = sizeof(fontes_variantes)/sizeof(fontes_variantes[0]);
   elemento fonte_atual;
+  double amplitude,
+         amplitude1,
+         amplitude2,
+         nivel_dc,
+         atraso,
+         freq,
+         defasagem,
+         amortecimento,
+         tempo_subida,
+         tempo_descida,
+         tempo_ligada,
+         periodo;
+    double coefAng,
+           coefLin,
+           t1,
+           t2;
   for (contador = 0; contador < quantidade_fontes; contador++)
   {
-    double amplitude,
-           amplitude1,
-           amplitude2,
-           nivel_dc,
-           atraso,
-           freq,
-           defasagem,
-           amortecimento,
-           tempo_subida,
-           tempo_descida,
-           tempo_ligada,
-           periodo;
-    unsigned ciclos;
+
     fonte_atual = fontes_variantes[contador];
     if (strcmp(fonte_atual.tipo_fonte, "SIN") == 0)
     {
@@ -151,6 +155,7 @@ void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
       fonte_atual.valor = nivel_dc +
                           amplitude*(exp(-amortecimento*(tempo_atual - atraso)))*(sin(2*PI*(tempo_atual - atraso) + (PI*defasagem)/180));
     }
+    /*Nao vou testar por enquanto*/
     else if (strcmp(fonte_atual.tipo_fonte, "PULSE") == 0)
     {
       amplitude1 = fonte_atual.fonte_pulso.amplitude1;
@@ -161,6 +166,9 @@ void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
       ciclos = fonte_atual.fonte_pulso.ciclos;
       periodo = fonte_atual.fonte_pulso.periodo;
       tempo_ligada = fonte_atual.fonte_pulso.tempo_ligada;
+
+
+
 
       /*Tratando descontinuidades*/
       if (tempo_subida == 0)
@@ -174,11 +182,25 @@ void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
       if (tempo <= atraso)
         fonte_atual.valor = amplitude1;
       else if (tempo <= tempo_subida)
-        fonte_atual.valor = amplitude2*tempo_subida; /*?????????*/
+      {
+        /*Achando a equacao da reta de subida*/
+        t1 = atraso;
+        t2 = atraso + tempo_subida;
+        coefAng = (amplitude2 - amplitude1)/(t2 - t1);
+        coefLin = amplitude1 - coefAng*t1;
+        fonte_atual.valor = coefAng*tempo + coefLin; /*????????????*/
+      }
       else if (tempo <= tempo_ligada)
         fonte_atual.valor = amplitude2;
       else if (tempo <= tempo_descida)
-        fonte_atual.valor = amplitude1;
+      {
+        /*Achando a equacao da reta de descida*/
+        t1 = atraso + tempo_subida + tempo_ligada;
+        t2 = t1 + tempo_descida;
+        coefAng = (amplitude2 - amplitude1)/(t2 - t1);
+        coefLin = amplitude1 - coefAng*t1;
+        fonte_atual.valor = coefAng*tempo + coefLin; /*????????????*/
+      }
     }/*pulse*/
   }/*for*/
 }
