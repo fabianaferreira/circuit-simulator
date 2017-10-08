@@ -389,7 +389,7 @@ int main(void)
     /*Monta a estampa apenas se a fonte for DC*/
     else if (tipo=='I' && (strcmp(netlist[i].tipo_fonte, "DC") == 0))
     {
-      g=netlist[i].valor;
+      g=netlist[i].fonte_dc.valor;
       Yn[netlist[i].a][nv+1]-=g;
       Yn[netlist[i].b][nv+1]+=g;
     }
@@ -401,7 +401,7 @@ int main(void)
       Yn[netlist[i].b][netlist[i].x]-=1;
       Yn[netlist[i].x][netlist[i].a]-=1;
       Yn[netlist[i].x][netlist[i].b]+=1;
-      Yn[netlist[i].x][nv+1]-=netlist[i].valor;
+      Yn[netlist[i].x][nv+1]-=netlist[i].fonte_dc.valor;
     }
     else if (tipo=='E')
     {
