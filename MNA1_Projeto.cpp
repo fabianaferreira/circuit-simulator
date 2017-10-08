@@ -84,7 +84,8 @@ typedef struct elemento /* Elemento do netlist */
 /*As seguintes variaveis vao definir os passos e o tempo de simulacao a ser usado
   Como o passo a ser escrito no arquivo de saida pode nao ser o mesmo do passo da
   integracao, vamos definir os dois separadamente*/
-double tempo_simulacao, passo_simulacao, passo_saida
+double tempo_simulacao, passo_simulacao, passo_saida;
+double tempo_atual;
 
 elemento netlist[MAX_ELEM]; /* Netlist */
 
@@ -278,10 +279,14 @@ int main(void)
 
     /*Atribuindo os valores dos passos de integracao e de escrita no arquivo de saida,
       alem do tempo total de simulacao definido no netlist*/
-    else if (tipo == ".TRAN")
+    else if (tipo == ".")
     {
-      sscanf(p, "%lg%lg%*10s%lg", &tempo_simulacao, &passo_simulacao, &passo_saida);
-      printf("%lg %lg %lg\n", tempo_simulacao, passo_simulacao, passo_saida);
+      if (strcmp (netlist[ne].nome, ".TRAN") == 0)
+      {
+        sscanf(p, "%lg%lg%*10s%lg", &tempo_simulacao, &passo_simulacao, &passo_saida);
+        printf("%lg %lg %lg\n", tempo_simulacao, passo_simulacao, passo_saida);
+      }
+      ne--;
     }
 
     else
@@ -381,13 +386,16 @@ int main(void)
       Yn[netlist[i].a][netlist[i].d]-=g;
       Yn[netlist[i].b][netlist[i].c]-=g;
     }
-    else if (tipo=='I')
+    /*Monta a estampa apenas se a fonte for DC*/
+    else if (tipo=='I' && (strcmp(netlist[i].tipo_fonte, "DC") == 0))
     {
       g=netlist[i].valor;
       Yn[netlist[i].a][nv+1]-=g;
       Yn[netlist[i].b][nv+1]+=g;
     }
-    else if (tipo=='V')
+
+    /*Monta a estampa apenas se a fonte for DC*/
+    else if (tipo=='V' && (strcmp(netlist[i].tipo_fonte, "DC") == 0))
     {
       Yn[netlist[i].a][netlist[i].x]+=1;
       Yn[netlist[i].b][netlist[i].x]-=1;
@@ -435,19 +443,33 @@ int main(void)
       Yn[netlist[i].x][netlist[i].c]+=1;
       Yn[netlist[i].x][netlist[i].d]-=1;
     }
-#ifdef DEBUG
-    /* Opcional: Mostra o sistema apos a montagem da estampa */
-    printf("Sistema apos a estampa de %s\n",netlist[i].nome);
-    for (k=1; k<=nv; k++)
+    /*Agora, precisamos fazer a analise no tempo. Porem, as fontes SINE e PULSE tem valores
+      que dependem do tempo de simulacao e do passo de integracao. Assim, as estampas das mesmas
+      tem que ser montadas dentro de um loop que ira resolver o sistema para cada tempo diferente.
+      Dessa forma, todas as estampas que nao dependem do tempo podem ser montadas antes, como esta
+      sendo feita, mas, a partir daqui, iremos montar as estampas dependentes e resolver o sistema*/
+    for (tempo_atual = 0; tempo_atual < tempo_simulacao; tempo_atual += passo_simulacao)
     {
-      for (j=1; j<=nv+1; j++)
-        if (Yn[k][j]!=0) printf("%+3.1f ",Yn[k][j]);
-        else printf(" ... ");
-      printf("\n");
+      /*Vou definir uma funcao que vai alterar as estampas dos elementos variantes no tempo.
+        Vai ser criado um vetor que, ao ler da netlist, vai conter os elementos que variam no
+        tempo (no caso inicial, as fontes), para que, ao montar as estampas de tempos em tempos,
+        o processo seja otimizado e não monte as estampas dos elementos que não sofrem variacao*/
     }
-    getch();
-#endif
-  }
+
+    #ifdef DEBUG
+        /* Opcional: Mostra o sistema apos a montagem da estampa */
+        printf("Sistema apos a estampa de %s\n",netlist[i].nome);
+        for (k=1; k<=nv; k++)
+        {
+          for (j=1; j<=nv+1; j++)
+            if (Yn[k][j]!=0) printf("%+3.1f ",Yn[k][j]);
+            else printf(" ... ");
+          printf("\n");
+        }
+        getch();
+    #endif
+  } /*end for monta estampas*/
+
   /* Resolve o sistema */
   if (resolversistema())
   {
