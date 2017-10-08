@@ -154,6 +154,12 @@ void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
       ciclos = fonte_atual.fonte_seno.ciclos;
       fonte_atual.valor = nivel_dc +
                           amplitude*(exp(-amortecimento*(tempo_atual - atraso)))*(sin(2*PI*(tempo_atual - atraso) + (PI*defasagem)/180));
+      /*A estampa da fonte para um tempo fixo é igual a uma fonte DC*/
+      Yn[fonte_atual.a][fonte_atual.x]+=1;
+      Yn[fonte_atual.b][fonte_atual.x]-=1;
+      Yn[fonte_atual.x][fonte_atual.a]-=1;
+      Yn[fonte_atual.x][fonte_atual.b]+=1;
+      Yn[fonte_atual.x][numeroVariaveis+1]-=fonte_atual.valor;
     }
     /*Nao vou testar por enquanto*/
     else if (strcmp(fonte_atual.tipo_fonte, "PULSE") == 0)
@@ -166,9 +172,6 @@ void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
       ciclos = fonte_atual.fonte_pulso.ciclos;
       periodo = fonte_atual.fonte_pulso.periodo;
       tempo_ligada = fonte_atual.fonte_pulso.tempo_ligada;
-
-
-
 
       /*Tratando descontinuidades*/
       if (tempo_subida == 0)
@@ -201,8 +204,15 @@ void montaEstampasVariantes (unsigned fontes_variantes[MAX_ELEM], double tempo)
         coefLin = amplitude1 - coefAng*t1;
         fonte_atual.valor = coefAng*tempo + coefLin; /*????????????*/
       }
+      /*A estampa da fonte para um tempo fixo é igual a uma fonte DC*/
+      Yn[fonte_atual.a][fonte_atual.x]+=1;
+      Yn[fonte_atual.b][fonte_atual.x]-=1;
+      Yn[fonte_atual.x][fonte_atual.a]-=1;
+      Yn[fonte_atual.x][fonte_atual.b]+=1;
+      Yn[fonte_atual.x][numeroVariaveis+1]-=fonte_atual.valor;
     }/*pulse*/
   }/*for*/
+
 }
 
 /*  Rotina para Resolucao de sistema de equacoes lineares.
