@@ -390,8 +390,13 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
       nivel_dc = elementoVariante.fonte_seno.nivel_dc;
       amortecimento = elementoVariante.fonte_seno.amortecimento;
       ciclos = elementoVariante.fonte_seno.ciclos;
-      elementoVariante.valor = nivel_dc +
-                               amplitude*(exp(-amortecimento*(tempo - atraso)))*(sin(2*PI*freq*(tempo - atraso) + (PI*defasagem)/180));
+      ciclos_passados = freq*tempo;
+        printf("Ciclos %u Ciclos passados %u\n", ciclos, ciclos_passados);
+      if (ciclos_passados >= ciclos)
+        elementoVariante.valor = 0;
+      else
+        elementoVariante.valor = nivel_dc +
+                                 amplitude*(exp(-amortecimento*(tempo - atraso)))*(sin(2*PI*freq*(tempo - atraso) + (PI*defasagem)/180));
     }
     else if (strcmp(netlist[i].tipo_fonte, "PULSE") == 0)
     {
@@ -453,17 +458,43 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
       Yn[elementoVariante.x][elementoVariante.b]+=1;
       Yn[elementoVariante.x][numeroVariaveis+1]-=g;
     }
+
     /*VAO DEPENDER DO PASSO E DO VALOR ANTERIOR, SEJA PONTOOP OU RESULTADO DO NEWTON-RAPHSON*/
     /*CAPACITOR*/
-    if (elementoVariante.nome[0]=='C')
+    else if (elementoVariante.nome[0]=='C')
     {
-
+      if (tempo == 0)
+      {
+        // Vira um R de 1GOhms
+        g = 1/1e9;
+  			YnInvariantes[netlist[i].a][netlist[i].a] += g;
+  			YnInvariantes[netlist[i].b][netlist[i].b] += g;
+  			YnInvariantes[netlist[i].a][netlist[i].b] -= g;
+  			YnInvariantes[netlist[i].b][netlist[i].a] -= g;
+      }
+      else
+      {
+        /*depende do passo e do valor anterior*/
+      }
     }
 
     /*INDUTOR*/
-    if (elementoVariante.nome[0]=='I')
+    else if (elementoVariante.nome[0]=='L')
     {
-
+      if (tempo == 0)
+      {
+        // Vira um R de 1nOhms
+  			g = 1/1e-9;
+  			YnInvariantes[netlist[i].a][netlist[i].x] += 1;
+  			YnInvariantes[netlist[i].b][netlist[i].x] -= 1;
+  			YnInvariantes[netlist[i].x][netlist[i].a] -= 1;
+  			YnInvariantes[netlist[i].x][netlist[i].b] += 1;
+  			YnInvariantes[netlist[i].x][netlist[i].x] += 1/g;
+      }
+      else
+      {
+        /*depende do passo e do valor anterior*/
+      }
     }
   }/*for*/
 
@@ -491,26 +522,6 @@ void MontarEstampasInvariantes(unsigned pontoOp)
 		if (tipo=='R')
 		{
 			g = 1/netlist[i].valor;
-			YnInvariantes[netlist[i].a][netlist[i].a] += g;
-			YnInvariantes[netlist[i].b][netlist[i].b] += g;
-			YnInvariantes[netlist[i].a][netlist[i].b] -= g;
-			YnInvariantes[netlist[i].b][netlist[i].a] -= g;
-		}
-		else if (pontoOp == 1 && tipo=='L')
-		{
-			// Vira um R de 1nOhms
-			g = 1/1e-9;
-			YnInvariantes[netlist[i].a][netlist[i].x] += 1;
-			YnInvariantes[netlist[i].b][netlist[i].x] -= 1;
-			YnInvariantes[netlist[i].x][netlist[i].a] -= 1;
-			YnInvariantes[netlist[i].x][netlist[i].b] += 1;
-			YnInvariantes[netlist[i].x][netlist[i].x] += 1/g;
-		}
-    /*So monta a estampa se for ponto de operacao*/
-		else if (pontoOp == 1 && tipo=='C')
-		{
-			// Vira um R de 1GOhms
-			g = 1/1e9;
 			YnInvariantes[netlist[i].a][netlist[i].a] += g;
 			YnInvariantes[netlist[i].b][netlist[i].b] += g;
 			YnInvariantes[netlist[i].a][netlist[i].b] -= g;
