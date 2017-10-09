@@ -111,6 +111,7 @@ char
   lista[MAX_NOS+1][MAX_NOME+2], /*Tem que caber jx antes do nome */
   txt[MAX_LINHA+1],
   *p;
+
 FILE *arquivo;
 
 double
@@ -163,7 +164,6 @@ int ResolverSistema(void)
 int NumerarNo(char *nome)
 {
   int i,achou;
-
   i=0; achou=0;
   while (!achou && i<=numeroVariaveis)
     if (!(achou=!strcmp(nome,lista[i]))) i++;
@@ -216,7 +216,7 @@ void LerNetlist (FILE *arquivo)
   while (fgets(txt,MAX_LINHA,arquivo))
   {
     numeroElementos++; /* Nao usa o netlist[0] */
-    if (numeroElementos>MAX_ELEM)
+    if (numeroElementos > MAX_ELEM)
     {
       printf("O programa so aceita ate %d elementos\n",MAX_ELEM);
       exit(1);
@@ -296,7 +296,6 @@ void LerNetlist (FILE *arquivo)
       netlist[numeroElementos].c=NumerarNo(nc);
       netlist[numeroElementos].d=NumerarNo(nd);
     }
-
     /*AMPLIFICADOR OPERACIONAL IDEAL*/
     else if (tipo=='O')
     {
@@ -345,7 +344,6 @@ void LerNetlist (FILE *arquivo)
       }
       numeroElementos--;
     }
-
     else
     {
       printf("Elemento desconhecido: %s\n",txt);
@@ -382,143 +380,82 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
   for (contador = 0; contador < quantidade; contador++)
   {
     elementoVariante = netlist[elementos[contador]];
-
     /*FONTE DE CORRENTE*/
-    if (elementoVariante.nome[0]=='I')
+    if (strcmp(elementoVariante.tipo_fonte, "SIN") == 0)
     {
-      if (strcmp(elementoVariante.tipo_fonte, "SIN") == 0)
-      {
-        amplitude = elementoVariante.fonte_seno.amplitude;
-        freq = elementoVariante.fonte_seno.freq;
-        atraso = elementoVariante.fonte_seno.atraso;
-        defasagem = elementoVariante.fonte_seno.defasagem;
-        nivel_dc = elementoVariante.fonte_seno.nivel_dc;
-        amortecimento = elementoVariante.fonte_seno.amortecimento;
-        ciclos = elementoVariante.fonte_seno.ciclos;
-        elementoVariante.valor = nivel_dc +
-                            amplitude*(exp(-amortecimento*(tempo - atraso)))*(sin(2*PI*freq*(tempo - atraso) + (PI*defasagem)/180));
-      }
-      else if (strcmp(netlist[i].tipo_fonte, "PULSE") == 0)
-      {
-        amplitude1 = elementoVariante.fonte_pulso.amplitude1;
-        amplitude2 = elementoVariante.fonte_pulso.amplitude2;
-        atraso = elementoVariante.fonte_pulso.atraso;
-        tempo_subida = elementoVariante.fonte_pulso.tempo_subida;
-        tempo_descida = elementoVariante.fonte_pulso.tempo_descida;
-        ciclos = elementoVariante.fonte_pulso.ciclos;
-        periodo = elementoVariante.fonte_pulso.periodo;
-        tempo_ligada = elementoVariante.fonte_pulso.tempo_ligada;
-        ciclos_passados = unsigned(tempo/periodo);
+      amplitude = elementoVariante.fonte_seno.amplitude;
+      freq = elementoVariante.fonte_seno.freq;
+      atraso = elementoVariante.fonte_seno.atraso;
+      defasagem = elementoVariante.fonte_seno.defasagem;
+      nivel_dc = elementoVariante.fonte_seno.nivel_dc;
+      amortecimento = elementoVariante.fonte_seno.amortecimento;
+      ciclos = elementoVariante.fonte_seno.ciclos;
+      elementoVariante.valor = nivel_dc +
+                               amplitude*(exp(-amortecimento*(tempo - atraso)))*(sin(2*PI*freq*(tempo - atraso) + (PI*defasagem)/180));
+    }
+    else if (strcmp(netlist[i].tipo_fonte, "PULSE") == 0)
+    {
+      amplitude1 = elementoVariante.fonte_pulso.amplitude1;
+      amplitude2 = elementoVariante.fonte_pulso.amplitude2;
+      atraso = elementoVariante.fonte_pulso.atraso;
+      tempo_subida = elementoVariante.fonte_pulso.tempo_subida;
+      tempo_descida = elementoVariante.fonte_pulso.tempo_descida;
+      ciclos = elementoVariante.fonte_pulso.ciclos;
+      periodo = elementoVariante.fonte_pulso.periodo;
+      tempo_ligada = elementoVariante.fonte_pulso.tempo_ligada;
+      ciclos_passados = unsigned(tempo/periodo);
 
-        /*Tratando descontinuidades*/
-        if (tempo_subida == 0)
-          tempo_descida = passo_simulacao;
-        if (tempo_descida == 0)
-          tempo_subida = passo_simulacao;
+      /*Tratando descontinuidades*/
+      if (tempo_subida == 0)
+        tempo_descida = passo_simulacao;
+      if (tempo_descida == 0)
+        tempo_subida = passo_simulacao;
 
-        tempo_normalizado = tempo - periodo*ciclos_passados;
-        /*Achando o valor da fonte no tempo atual*/
-        if (ciclos_passados >= ciclos)
-          elementoVariante.valor = amplitude1;
-        else if (tempo_normalizado <= atraso)
-          elementoVariante.valor = amplitude1;
-        else if (tempo_normalizado <= tempo_subida + atraso)
-        {
-          /*Achando a equacao da reta de subida*/
-          t1 = atraso;
-          t2 = atraso + tempo_subida;
-          coefAng = (amplitude2 - amplitude1)/(t2 - t1);
-          coefLin = amplitude1 - coefAng*t1;
-          elementoVariante.valor = coefAng*tempo + coefLin; /*????????????*/
-        }
-        else if (tempo_normalizado <= atraso + tempo_subida + tempo_ligada)
-          elementoVariante.valor = amplitude2;
-        else if (tempo_normalizado <= periodo)
-        {
-          /*Achando a equacao da reta de descida*/
-          t1 = atraso + tempo_subida + tempo_ligada;
-          t2 = t1 + tempo_descida;
-          coefAng = (amplitude1 - amplitude2)/(t1 - t2);
-          coefLin = amplitude1 - coefAng*t1;
-          elementoVariante.valor = coefAng*tempo + coefLin;
-        }
+      tempo_normalizado = tempo - periodo*ciclos_passados;
+      /*Achando o valor da fonte no tempo atual*/
+      if (ciclos_passados >= ciclos)
+        elementoVariante.valor = amplitude1;
+      else if (tempo_normalizado <= atraso)
+        elementoVariante.valor = amplitude1;
+      else if (tempo_normalizado <= tempo_subida + atraso)
+      {
+        /*Achando a equacao da reta de subida*/
+        t1 = atraso;
+        t2 = atraso + tempo_subida;
+        coefAng = (amplitude2 - amplitude1)/(t2 - t1);
+        coefLin = amplitude1 - coefAng*t1;
+        elementoVariante.valor = coefAng*tempo + coefLin; /*????????????*/
       }
-      g=elementoVariante.valor;
+      else if (tempo_normalizado <= atraso + tempo_subida + tempo_ligada)
+        elementoVariante.valor = amplitude2;
+      else if (tempo_normalizado <= periodo)
+      {
+        /*Achando a equacao da reta de descida*/
+        t1 = atraso + tempo_subida + tempo_ligada;
+        t2 = t1 + tempo_descida;
+        coefAng = (amplitude1 - amplitude2)/(t1 - t2);
+        coefLin = amplitude1 - coefAng*t1;
+        elementoVariante.valor = coefAng*tempo + coefLin;
+      }
+    }
+    g=elementoVariante.valor;
+    if (elementoVariante.nome[0] == 'I')
+    {
       Yn[elementoVariante.a][numeroVariaveis+1]-=g;
       Yn[elementoVariante.b][numeroVariaveis+1]+=g;
     }
 
-    /*FONTE DE TENSAO*/
-    else if (tipo=='V')
+    else if (elementoVariante.nome[0] == 'V')
     {
-      if (strcmp(elementoVariante.tipo_fonte, "SIN") == 0)
-      {
-        amplitude = elementoVariante.fonte_seno.amplitude;
-        freq = elementoVariante.fonte_seno.freq;
-        atraso = elementoVariante.fonte_seno.atraso;
-        defasagem = elementoVariante.fonte_seno.defasagem;
-        nivel_dc = elementoVariante.fonte_seno.nivel_dc;
-        amortecimento = elementoVariante.fonte_seno.amortecimento;
-        ciclos = elementoVariante.fonte_seno.ciclos;
-        elementoVariante.valor = nivel_dc +
-                            amplitude*(exp(-amortecimento*(tempo - atraso)))*(sin(2*PI*freq*(tempo - atraso) + (PI*defasagem)/180));
-      }
-      else if (strcmp(elementoVariante.tipo_fonte, "PULSE") == 0)
-      {
-        amplitude1 = elementoVariante.fonte_pulso.amplitude1;
-        amplitude2 = elementoVariante.fonte_pulso.amplitude2;
-        atraso = elementoVariante.fonte_pulso.atraso;
-        tempo_subida = elementoVariante.fonte_pulso.tempo_subida;
-        tempo_descida = elementoVariante.fonte_pulso.tempo_descida;
-        ciclos = elementoVariante.fonte_pulso.ciclos;
-        periodo = elementoVariante.fonte_pulso.periodo;
-        tempo_ligada = elementoVariante.fonte_pulso.tempo_ligada;
-        ciclos_passados = unsigned(tempo/periodo);
-
-        /*Tratando descontinuidades*/
-        if (tempo_subida == 0)
-          tempo_descida = passo_simulacao;
-        if (tempo_descida == 0)
-          tempo_subida = passo_simulacao;
-
-        tempo_normalizado = tempo - periodo*ciclos_passados;
-        /*Achando o valor da fonte no tempo atual*/
-        if (ciclos_passados >= ciclos)
-          elementoVariante.valor = amplitude1;
-        else if (tempo_normalizado <= atraso)
-          elementoVariante.valor = amplitude1;
-        else if (tempo_normalizado <= tempo_subida + atraso)
-        {
-          /*Achando a equacao da reta de subida*/
-          t1 = atraso;
-          t2 = atraso + tempo_subida;
-          coefAng = (amplitude2 - amplitude1)/(t2 - t1);
-          coefLin = amplitude1 - coefAng*t1;
-          elementoVariante.valor = coefAng*tempo + coefLin; /*????????????*/
-        }
-        else if (tempo_normalizado <= atraso + tempo_subida + tempo_ligada)
-          elementoVariante.valor = amplitude2;
-        else if (tempo_normalizado <= periodo)
-        {
-          /*Achando a equacao da reta de descida*/
-          t1 = atraso + tempo_subida + tempo_ligada;
-          t2 = t1 + tempo_descida;
-          coefAng = (amplitude1 - amplitude2)/(t1 - t2);
-          coefLin = amplitude1 - coefAng*t1;
-          elementoVariante.valor = coefAng*tempo + coefLin;
-        }
-      }
-      g=elementoVariante.valor;
       Yn[elementoVariante.a][elementoVariante.x]+=1;
       Yn[elementoVariante.b][elementoVariante.x]-=1;
       Yn[elementoVariante.x][elementoVariante.a]-=1;
       Yn[elementoVariante.x][elementoVariante.b]+=1;
       Yn[elementoVariante.x][numeroVariaveis+1]-=g;
     }
-
+  }
 
     /*VAO DEPENDER DO PASSO E DO VALOR ANTERIOR, SEJA PONTOOP OU RESULTADO DO NEWTON-RAPHSON*/
-
     /*CAPACITOR*/
     if (elementoVariante.nome[0]=='C')
     {
@@ -556,100 +493,98 @@ void MontarEstampasInvariantes(unsigned pontoOp)
 		if (tipo=='R')
 		{
 			g = 1/netlist[i].valor;
-			Yn[netlist[i].a][netlist[i].a] += g;
-			Yn[netlist[i].b][netlist[i].b] += g;
-			Yn[netlist[i].a][netlist[i].b] -= g;
-			Yn[netlist[i].b][netlist[i].a] -= g;
+			YnInvariantes[netlist[i].a][netlist[i].a] += g;
+			YnInvariantes[netlist[i].b][netlist[i].b] += g;
+			YnInvariantes[netlist[i].a][netlist[i].b] -= g;
+			YnInvariantes[netlist[i].b][netlist[i].a] -= g;
 		}
 		else if (pontoOp == 1 && tipo=='L')
 		{
 			// Vira um R de 1nOhms
 			g = 1/1e-9;
-			Yn[netlist[i].a][netlist[i].x] += 1;
-			Yn[netlist[i].b][netlist[i].x] -= 1;
-			Yn[netlist[i].x][netlist[i].a] -= 1;
-			Yn[netlist[i].x][netlist[i].b] += 1;
-			Yn[netlist[i].x][netlist[i].x] += 1/g;
+			YnInvariantes[netlist[i].a][netlist[i].x] += 1;
+			YnInvariantes[netlist[i].b][netlist[i].x] -= 1;
+			YnInvariantes[netlist[i].x][netlist[i].a] -= 1;
+			YnInvariantes[netlist[i].x][netlist[i].b] += 1;
+			YnInvariantes[netlist[i].x][netlist[i].x] += 1/g;
 		}
     /*So monta a estampa se for ponto de operacao*/
 		else if (pontoOp == 1 && tipo=='C')
 		{
 			// Vira um R de 1GOhms
 			g = 1/1e9;
-			Yn[netlist[i].a][netlist[i].a] += g;
-			Yn[netlist[i].b][netlist[i].b] += g;
-			Yn[netlist[i].a][netlist[i].b] -= g;
-			Yn[netlist[i].b][netlist[i].a] -= g;
+			YnInvariantes[netlist[i].a][netlist[i].a] += g;
+			YnInvariantes[netlist[i].b][netlist[i].b] += g;
+			YnInvariantes[netlist[i].a][netlist[i].b] -= g;
+			YnInvariantes[netlist[i].b][netlist[i].a] -= g;
 		}
 		else if (tipo=='G')
 		{
 			g = netlist[i].valor;
-			Yn[netlist[i].a][netlist[i].c] += g;
-			Yn[netlist[i].b][netlist[i].d] += g;
-			Yn[netlist[i].a][netlist[i].d] -= g;
-			Yn[netlist[i].b][netlist[i].c] -= g;
+			YnInvariantes[netlist[i].a][netlist[i].c] += g;
+			YnInvariantes[netlist[i].b][netlist[i].d] += g;
+			YnInvariantes[netlist[i].a][netlist[i].d] -= g;
+			YnInvariantes[netlist[i].b][netlist[i].c] -= g;
 		}
 
     /*So preenche se for DC*/
-    else if (tipo=='I' && (strcmp(netlist[i].tipo_fonte, "DC") == 0))
-    {
-
-      netlist[i].valor = netlist[i].fonte_dc.valor;
-      g = netlist[i].valor;
-      Yn[netlist[i].a][numeroVariaveis+1]-=g;
-      Yn[netlist[i].b][numeroVariaveis+1]+=g;
-    }
-
-    /*Monta a estampa apenas se a fonte for DC*/
-    else if (tipo=='V' && (strcmp(netlist[i].tipo_fonte, "DC") == 0))
+    else if (strcmp(netlist[i].tipo_fonte, "DC") == 0)
     {
       netlist[i].valor = netlist[i].fonte_dc.valor;
       g = netlist[i].valor;
-      Yn[netlist[i].a][netlist[i].x]+=1;
-      Yn[netlist[i].b][netlist[i].x]-=1;
-      Yn[netlist[i].x][netlist[i].a]-=1;
-      Yn[netlist[i].x][netlist[i].b]+=1;
-      Yn[netlist[i].x][numeroVariaveis+1]-=g;
+      if (tipo =='I')
+      {
+        YnInvariantes[netlist[i].a][numeroVariaveis+1]-=g;
+        YnInvariantes[netlist[i].b][numeroVariaveis+1]+=g;
+      }
+      else if (tipo == 'V')
+      {
+        YnInvariantes[netlist[i].a][netlist[i].x]+=1;
+        YnInvariantes[netlist[i].b][netlist[i].x]-=1;
+        YnInvariantes[netlist[i].x][netlist[i].a]-=1;
+        YnInvariantes[netlist[i].x][netlist[i].b]+=1;
+        YnInvariantes[netlist[i].x][numeroVariaveis+1]-=g;
+      }
     }
 		else if (tipo=='E')
 		{
 			g = netlist[i].valor;
-			Yn[netlist[i].a][netlist[i].x] += 1;
-			Yn[netlist[i].b][netlist[i].x] -= 1;
-			Yn[netlist[i].x][netlist[i].a] -= 1;
-			Yn[netlist[i].x][netlist[i].b] += 1;
-			Yn[netlist[i].x][netlist[i].c] += g;
-			Yn[netlist[i].x][netlist[i].d] -= g;
+			YnInvariantes[netlist[i].a][netlist[i].x] += 1;
+			YnInvariantes[netlist[i].b][netlist[i].x] -= 1;
+			YnInvariantes[netlist[i].x][netlist[i].a] -= 1;
+			YnInvariantes[netlist[i].x][netlist[i].b] += 1;
+			YnInvariantes[netlist[i].x][netlist[i].c] += g;
+			YnInvariantes[netlist[i].x][netlist[i].d] -= g;
 		}
 		else if (tipo=='F')
 		{
 			g = netlist[i].valor;
-			Yn[netlist[i].a][netlist[i].x] += g;
-			Yn[netlist[i].b][netlist[i].x] -= g;
-			Yn[netlist[i].c][netlist[i].x] += 1;
-			Yn[netlist[i].d][netlist[i].x] -= 1;
-			Yn[netlist[i].x][netlist[i].c] -= 1;
-			Yn[netlist[i].x][netlist[i].d] += 1;
+			YnInvariantes[netlist[i].a][netlist[i].x] += g;
+			YnInvariantes[netlist[i].b][netlist[i].x] -= g;
+			YnInvariantes[netlist[i].c][netlist[i].x] += 1;
+			YnInvariantes[netlist[i].d][netlist[i].x] -= 1;
+			YnInvariantes[netlist[i].x][netlist[i].c] -= 1;
+			YnInvariantes[netlist[i].x][netlist[i].d] += 1;
 		}
 		else if (tipo=='H')
 		{
 			g = netlist[i].valor;
-			Yn[netlist[i].a][netlist[i].y] += 1;
-			Yn[netlist[i].b][netlist[i].y] -= 1;
-			Yn[netlist[i].c][netlist[i].x] += 1;
-			Yn[netlist[i].d][netlist[i].x] -= 1;
-			Yn[netlist[i].y][netlist[i].a] -= 1;
-			Yn[netlist[i].y][netlist[i].b] += 1;
-			Yn[netlist[i].x][netlist[i].c] -= 1;
-			Yn[netlist[i].x][netlist[i].d] += 1;
-			Yn[netlist[i].y][netlist[i].x] += g;
+			YnInvariantes[netlist[i].a][netlist[i].y] += 1;
+			YnInvariantes[netlist[i].b][netlist[i].y] -= 1;
+			YnInvariantes[netlist[i].c][netlist[i].x] += 1;
+			YnInvariantes[netlist[i].d][netlist[i].x] -= 1;
+			YnInvariantes[netlist[i].y][netlist[i].a] -= 1;
+			YnInvariantes[netlist[i].y][netlist[i].b] += 1;
+			YnInvariantes[netlist[i].x][netlist[i].c] -= 1;
+			YnInvariantes[netlist[i].x][netlist[i].d] += 1;
+			YnInvariantes[netlist[i].y][netlist[i].x] += g;
 		}
 		else if (tipo=='O')
 		{
-			Yn[netlist[i].a][netlist[i].x] += 1;
-			Yn[netlist[i].b][netlist[i].x] -= 1;
-			Yn[netlist[i].x][netlist[i].c] += 1;
-			Yn[netlist[i].x][netlist[i].d] -= 1;
+			YnInvariantes[netlist[i].a][netlist[i].x] += 1;
+			YnInvariantes[netlist[i].b][netlist[i].x] -= 1;
+			YnInvariantes[netlist[i].x][netlist[i].c] += 1;
+			YnInvariantes[netlist[i].x][netlist[i].d] -= 1;
 		}
     #ifdef DEBUG
     		/* Opcional: Mostra o sistema apos a montagem da estampa */
@@ -733,7 +668,6 @@ void AcrescentarVariaveis()
       netlist[i].y=numeroVariaveis;
     }
   }
-
 }/*AcrescentarVariaveis*/
 
 int main(void)
@@ -759,7 +693,8 @@ int main(void)
     printf("Arquivo %s inexistente\n",nomeArquivo);
     goto denovo;
   }
-  LerNetlist(&arquivo);
+
+  LerNetlist(arquivo);
   AcrescentarVariaveis();
   ListarTudo();
 
