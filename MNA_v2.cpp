@@ -453,8 +453,6 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
       Yn[elementoVariante.x][elementoVariante.b]+=1;
       Yn[elementoVariante.x][numeroVariaveis+1]-=g;
     }
-  }
-
     /*VAO DEPENDER DO PASSO E DO VALOR ANTERIOR, SEJA PONTOOP OU RESULTADO DO NEWTON-RAPHSON*/
     /*CAPACITOR*/
     if (elementoVariante.nome[0]=='C')
@@ -467,20 +465,20 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
     {
 
     }
-
-    /*DEBUG*/
-    // printf("Sistema apos a estampa de tempo %lg\n",tempo);
-		// for (k=1; k<=numeroVariaveis; k++)
-		// {
-		// 	for (j=1; j<=numeroVariaveis+1; j++)
-		// 		if (Yn[k][j]!=0)
-		// 			printf("%+4.3f ",Yn[k][j]);
-		// 		else printf(" ..... ");
-		// 	printf("\n");
-		// }
-		// getch();
-    /*END DEBUG*/
   }/*for*/
+
+  /*DEBUG*/
+  // printf("Sistema apos a estampa de tempo %lg\n",tempo);
+	// for (k=1; k<=numeroVariaveis; k++)
+	// {
+	// 	for (j=1; j<=numeroVariaveis+1; j++)
+	// 		if (Yn[k][j]!=0)
+	// 			printf("%+4.3f ",Yn[k][j]);
+	// 		else printf(" ..... ");
+	// 	printf("\n");
+	// }
+	// getch();
+  /*END DEBUG*/
 }/*MontarEstampasVariantes*/
 
 
@@ -702,7 +700,7 @@ int main(void)
   /*Escreve o header do arquivo de saida*/
   fprintf(arquivoSaida, "%s", "t");
   for (i=1; i<=numeroVariaveis; i++)
-    fprintf(arquivoSaida, " %s", txt, lista[i]);
+    fprintf(arquivoSaida, " %s", lista[i]);
   fprintf(arquivoSaida, "\n");
 
   MontarEstampasInvariantes(0); /*0 pois nao e PontoOp por enquanto*/
