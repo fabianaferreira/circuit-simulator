@@ -1,0 +1,8 @@
+\select@language {portuguese}
+\contentsline {section}{\numberline {1}Objetivo}{1}
+\contentsline {section}{\numberline {2}Equipamentos Utilizados}{1}
+\contentsline {section}{\numberline {3}Procedimento Experimental}{1}
+\contentsline {subsection}{\numberline {3.1}subse\IeC {\c c}\IeC {\~a}o1}{1}
+\contentsline {section}{\numberline {4}An\IeC {\'a}lise dos Resultados}{1}
+\contentsline {section}{\numberline {5}Conclus\IeC {\~a}o}{2}
+\contentsline {section}{\numberline {6}Refer\IeC {\^e}ncias}{3}

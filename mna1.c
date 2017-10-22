@@ -339,7 +339,7 @@ int main(void)
   /* Resolve o sistema */
   if (resolversistema()) {
     getch();
-    exit;
+   exit(0);
   }
 #ifdef DEBUG
   /* Opcional: Mostra o sistema resolvido */
