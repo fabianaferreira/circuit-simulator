@@ -41,6 +41,8 @@ Os nos podem ser nomes
 #define MAX_ELEM 50
 #define MAX_NOS 50
 #define TOLG 1e-9
+#define PO_CAPACITOR  1e9
+#define PO_INDUTOR    1e-9
 //#define DEBUG
 #define PI acos(-1.0)
 #define NOME_ARQUIVO_SAIDA "saida_simulacao.tab"
@@ -83,6 +85,7 @@ typedef struct elemento /* Elemento do netlist */
   sine fonte_seno;
   dc fonte_dc;
   pulse fonte_pulso;
+  double jt0, vt0;
 } elemento;
 
 /*As seguintes variaveis vao definir os passos e o tempo de simulacao a ser usado
@@ -242,6 +245,8 @@ void LerNetlist (FILE *arquivo)
       printf("%s %s %s %g\n",netlist[numeroElementos].nome,na,nb,netlist[numeroElementos].valor);
       netlist[numeroElementos].a=NumerarNo(na);
       netlist[numeroElementos].b=NumerarNo(nb);
+      elementosVariantes[contadorElementosVariantes] = numeroElementos;
+      contadorElementosVariantes++;
     }
     /*INDUTOR*/
     else if (tipo=='L')
@@ -250,6 +255,8 @@ void LerNetlist (FILE *arquivo)
       printf("%s %s %s %g\n",netlist[numeroElementos].nome,na,nb,netlist[numeroElementos].valor);
       netlist[numeroElementos].a=NumerarNo(na);
       netlist[numeroElementos].b=NumerarNo(nb);
+      elementosVariantes[contadorElementosVariantes] = numeroElementos;
+      contadorElementosVariantes++;
     }
 
     else if (tipo == 'I' || tipo == 'V')
@@ -355,7 +362,7 @@ void LerNetlist (FILE *arquivo)
 }/*LerNetlist*/
 
 /*Pega apenas as fontes variantes do netlist e monta a estampa de acordo com o tempo atual da simulacao*/
-void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned quantidade /*, double passo_simulacao*/) /*vai usar tambem o YnAnterior para C e L*/
+void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned quantidade, double passo_simulacao) /*vai usar tambem o YnAnterior para C e L*/
 {
   unsigned contador, ciclos, ciclos_passados;
   elemento elementoVariante;
@@ -376,145 +383,176 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
            coefLin,
            t1,
            t2;
-  CopiarEstampaInvariante();
-  for (contador = 0; contador < quantidade; contador++)
-  {
-    elementoVariante = netlist[elementos[contador]];
-    /*FONTE DE CORRENTE*/
-    if (strcmp(elementoVariante.tipo_fonte, "SIN") == 0)
+    CopiarEstampaInvariante();
+    for (contador = 0; contador < quantidade; contador++)
     {
-      amplitude = elementoVariante.fonte_seno.amplitude;
-      freq = elementoVariante.fonte_seno.freq;
-      atraso = elementoVariante.fonte_seno.atraso;
-      defasagem = elementoVariante.fonte_seno.defasagem;
-      nivel_dc = elementoVariante.fonte_seno.nivel_dc;
-      amortecimento = elementoVariante.fonte_seno.amortecimento;
-      ciclos = elementoVariante.fonte_seno.ciclos;
-      ciclos_passados = freq*tempo;
-        printf("Ciclos %u Ciclos passados %u\n", ciclos, ciclos_passados);
-      if (ciclos_passados >= ciclos)
-        elementoVariante.valor = 0;
-      else
-        elementoVariante.valor = nivel_dc +
-                                 amplitude*(exp(-amortecimento*(tempo - atraso)))*(sin(2*PI*freq*(tempo - atraso) + (PI*defasagem)/180));
-    }
-    else if (strcmp(netlist[i].tipo_fonte, "PULSE") == 0)
-    {
-      amplitude1 = elementoVariante.fonte_pulso.amplitude1;
-      amplitude2 = elementoVariante.fonte_pulso.amplitude2;
-      atraso = elementoVariante.fonte_pulso.atraso;
-      tempo_subida = elementoVariante.fonte_pulso.tempo_subida;
-      tempo_descida = elementoVariante.fonte_pulso.tempo_descida;
-      ciclos = elementoVariante.fonte_pulso.ciclos;
-      periodo = elementoVariante.fonte_pulso.periodo;
-      tempo_ligada = elementoVariante.fonte_pulso.tempo_ligada;
-      ciclos_passados = unsigned(tempo/periodo);
-
-      /*Tratando descontinuidades*/
-      if (tempo_subida == 0)
-        tempo_descida = passo_simulacao;
-      if (tempo_descida == 0)
-        tempo_subida = passo_simulacao;
-
-      tempo_normalizado = tempo - periodo*ciclos_passados;
-      /*Achando o valor da fonte no tempo atual*/
-      if (ciclos_passados >= ciclos)
-        elementoVariante.valor = amplitude1;
-      else if (tempo_normalizado <= atraso)
-        elementoVariante.valor = amplitude1;
-      else if (tempo_normalizado <= tempo_subida + atraso)
+      elementoVariante = netlist[elementos[contador]];
+      /*FONTE DE CORRENTE*/
+      if (strcmp(elementoVariante.tipo_fonte, "SIN") == 0)
       {
-        /*Achando a equacao da reta de subida*/
-        t1 = atraso;
-        t2 = atraso + tempo_subida;
-        coefAng = (amplitude2 - amplitude1)/(t2 - t1);
-        coefLin = amplitude1 - coefAng*t1;
-        elementoVariante.valor = coefAng*tempo + coefLin; /*????????????*/
+        amplitude = elementoVariante.fonte_seno.amplitude;
+        freq = elementoVariante.fonte_seno.freq;
+        atraso = elementoVariante.fonte_seno.atraso;
+        defasagem = elementoVariante.fonte_seno.defasagem;
+        nivel_dc = elementoVariante.fonte_seno.nivel_dc;
+        amortecimento = elementoVariante.fonte_seno.amortecimento;
+        ciclos = elementoVariante.fonte_seno.ciclos;
+        ciclos_passados = freq*tempo;
+          printf("Ciclos %u Ciclos passados %u\n", ciclos, ciclos_passados);
+        if (ciclos_passados >= ciclos)
+          elementoVariante.valor = 0;
+        else
+          elementoVariante.valor = nivel_dc +
+                                   amplitude*(exp(-amortecimento*(tempo - atraso)))*(sin(2*PI*freq*(tempo - atraso) + (PI*defasagem)/180));
       }
-      else if (tempo_normalizado <= atraso + tempo_subida + tempo_ligada)
-        elementoVariante.valor = amplitude2;
-      else if (tempo_normalizado <= periodo)
+      else if (strcmp(netlist[i].tipo_fonte, "PULSE") == 0)
       {
-        /*Achando a equacao da reta de descida*/
-        t1 = atraso + tempo_subida + tempo_ligada;
-        t2 = t1 + tempo_descida;
-        coefAng = (amplitude1 - amplitude2)/(t1 - t2);
-        coefLin = amplitude1 - coefAng*t1;
-        elementoVariante.valor = coefAng*tempo + coefLin;
-      }
-    }
-    g=elementoVariante.valor;
-    if (elementoVariante.nome[0] == 'I')
-    {
-      Yn[elementoVariante.a][numeroVariaveis+1]-=g;
-      Yn[elementoVariante.b][numeroVariaveis+1]+=g;
-    }
+        amplitude1 = elementoVariante.fonte_pulso.amplitude1;
+        amplitude2 = elementoVariante.fonte_pulso.amplitude2;
+        atraso = elementoVariante.fonte_pulso.atraso;
+        tempo_subida = elementoVariante.fonte_pulso.tempo_subida;
+        tempo_descida = elementoVariante.fonte_pulso.tempo_descida;
+        ciclos = elementoVariante.fonte_pulso.ciclos;
+        periodo = elementoVariante.fonte_pulso.periodo;
+        tempo_ligada = elementoVariante.fonte_pulso.tempo_ligada;
+        ciclos_passados = unsigned(tempo/periodo);
 
-    else if (elementoVariante.nome[0] == 'V')
-    {
-      Yn[elementoVariante.a][elementoVariante.x]+=1;
-      Yn[elementoVariante.b][elementoVariante.x]-=1;
-      Yn[elementoVariante.x][elementoVariante.a]-=1;
-      Yn[elementoVariante.x][elementoVariante.b]+=1;
-      Yn[elementoVariante.x][numeroVariaveis+1]-=g;
-    }
+        /*Tratando descontinuidades*/
+        if (tempo_subida == 0)
+          tempo_descida = passo_simulacao;
+        if (tempo_descida == 0)
+          tempo_subida = passo_simulacao;
 
-    /*VAO DEPENDER DO PASSO E DO VALOR ANTERIOR, SEJA PONTOOP OU RESULTADO DO NEWTON-RAPHSON*/
-    /*CAPACITOR*/
-    else if (elementoVariante.nome[0]=='C')
-    {
-      if (tempo == 0)
-      {
-        // Vira um R de 1GOhms
-        g = 1/1e9;
-  			YnInvariantes[netlist[i].a][netlist[i].a] += g;
-  			YnInvariantes[netlist[i].b][netlist[i].b] += g;
-  			YnInvariantes[netlist[i].a][netlist[i].b] -= g;
-  			YnInvariantes[netlist[i].b][netlist[i].a] -= g;
+        tempo_normalizado = tempo - periodo*ciclos_passados;
+        /*Achando o valor da fonte no tempo atual*/
+        if (ciclos_passados >= ciclos)
+          elementoVariante.valor = amplitude1;
+        else if (tempo_normalizado <= atraso)
+          elementoVariante.valor = amplitude1;
+        else if (tempo_normalizado <= tempo_subida + atraso)
+        {
+          /*Achando a equacao da reta de subida*/
+          t1 = atraso;
+          t2 = atraso + tempo_subida;
+          coefAng = (amplitude2 - amplitude1)/(t2 - t1);
+          coefLin = amplitude1 - coefAng*t1;
+          elementoVariante.valor = coefAng*tempo + coefLin; /*????????????*/
+        }
+        else if (tempo_normalizado <= atraso + tempo_subida + tempo_ligada)
+          elementoVariante.valor = amplitude2;
+        else if (tempo_normalizado <= periodo)
+        {
+          /*Achando a equacao da reta de descida*/
+          t1 = atraso + tempo_subida + tempo_ligada;
+          t2 = t1 + tempo_descida;
+          coefAng = (amplitude1 - amplitude2)/(t1 - t2);
+          coefLin = amplitude1 - coefAng*t1;
+          elementoVariante.valor = coefAng*tempo + coefLin;
+        }
       }
-      else
+      g=elementoVariante.valor;
+      if (elementoVariante.nome[0] == 'I')
       {
-        /*depende do passo e do valor anterior*/
+        Yn[elementoVariante.a][numeroVariaveis+1]-=g;
+        Yn[elementoVariante.b][numeroVariaveis+1]+=g;
       }
-    }
 
-    /*INDUTOR*/
-    else if (elementoVariante.nome[0]=='L')
-    {
-      if (tempo == 0)
+      else if (elementoVariante.nome[0] == 'V')
       {
-        // Vira um R de 1nOhms
-  			g = 1/1e-9;
-  			YnInvariantes[netlist[i].a][netlist[i].x] += 1;
-  			YnInvariantes[netlist[i].b][netlist[i].x] -= 1;
-  			YnInvariantes[netlist[i].x][netlist[i].a] -= 1;
-  			YnInvariantes[netlist[i].x][netlist[i].b] += 1;
-  			YnInvariantes[netlist[i].x][netlist[i].x] += 1/g;
+        Yn[elementoVariante.a][elementoVariante.x]+=1;
+        Yn[elementoVariante.b][elementoVariante.x]-=1;
+        Yn[elementoVariante.x][elementoVariante.a]-=1;
+        Yn[elementoVariante.x][elementoVariante.b]+=1;
+        Yn[elementoVariante.x][numeroVariaveis+1]-=g;
       }
-      else
-      {
-        /*depende do passo e do valor anterior*/
-      }
-    }
-  }/*for*/
 
-  /*DEBUG*/
-  // printf("Sistema apos a estampa de tempo %lg\n",tempo);
-	// for (k=1; k<=numeroVariaveis; k++)
-	// {
-	// 	for (j=1; j<=numeroVariaveis+1; j++)
-	// 		if (Yn[k][j]!=0)
-	// 			printf("%+4.3f ",Yn[k][j]);
-	// 		else printf(" ..... ");
-	// 	printf("\n");
-	// }
-	// getch();
-  /*END DEBUG*/
+      /*VAO DEPENDER DO PASSO E DO VALOR ANTERIOR, SEJA PONTOOP OU RESULTADO DO NEWTON-RAPHSON*/
+      /*CAPACITOR*/
+      else if (elementoVariante.nome[0]=='C')
+      {
+        if (tempo == 0)
+        {
+          // Vira um R de 1GOhms
+          g = 1/PO_CAPACITOR;
+    			Yn[elementoVariante.a][elementoVariante.a] += g;
+    			Yn[elementoVariante.b][elementoVariante.b] += g;
+    			Yn[elementoVariante.a][elementoVariante.b] -= g;
+    			Yn[elementoVariante.b][elementoVariante.a] -= g;
+        }
+        else
+        {
+          g = (2*netlist[i].valor)/passo_simulacao;
+          Yn[elementoVariante.a][elementoVariante.a] += g;
+    			Yn[elementoVariante.b][elementoVariante.b] += g;
+    			Yn[elementoVariante.a][elementoVariante.b] -= g;
+    			Yn[elementoVariante.b][elementoVariante.a] -= g;
+          Yn[elementoVariante.a][numeroVariaveis+1]+= g*(elementoVariante.vt0) + elementoVariante.jt0;
+          Yn[elementoVariante.b][numeroVariaveis+1]-= g*(elementoVariante.vt0) + elementoVariante.jt0;
+        }
+      }
+
+      /*INDUTOR*/
+      else if (elementoVariante.nome[0]=='L')
+      {
+        if (tempo == 0)
+        {
+          // Vira um R de 1nOhms
+    			g = 1/PO_INDUTOR;
+    			Yn[netlist[i].a][netlist[i].x] += 1;
+    			Yn[netlist[i].b][netlist[i].x] -= 1;
+    			Yn[netlist[i].x][netlist[i].a] -= 1;
+    			Yn[netlist[i].x][netlist[i].b] += 1;
+    			Yn[netlist[i].x][netlist[i].x] += g;
+        }
+        else
+        {
+          /*depende do passo e do valor anterior*/
+          g = (2*netlist[i].valor)/passo_simulacao;
+          Yn[netlist[i].a][netlist[i].x] += 1;
+          Yn[netlist[i].b][netlist[i].x] -= 1;
+          Yn[netlist[i].x][netlist[i].a] -= 1;
+          Yn[netlist[i].x][netlist[i].b] += 1;
+          Yn[netlist[i].x][netlist[i].x] += g;
+          Yn[elementoVariante.x][numeroVariaveis+1]+= g*(elementoVariante.jt0) + elementoVariante.vt0;
+        }
+      }
+    }/*for*/
+
+    /*DEBUG*/
+    // printf("Sistema apos a estampa de tempo %lg\n",tempo);
+  	// for (k=1; k<=numeroVariaveis; k++)
+  	// {
+  	// 	for (j=1; j<=numeroVariaveis+1; j++)
+  	// 		if (Yn[k][j]!=0)
+  	// 			printf("%+4.3f ",Yn[k][j]);
+  	// 		else printf(" ..... ");
+  	// 	printf("\n");
+  	// }
+  	// getch();
+    /*END DEBUG*/
 }/*MontarEstampasVariantes*/
 
+void CalcularJt0EVt0 (unsigned quantidade)
+{
+  unsigned contador;
+  for (contador = 0; contador < quantidade; contador++)
+  {
+    elementoCL = netlist[contador];
+    if (elementoCL.nome[0] == 'C')
+    {
+      elementoCL.vt0 = Yn[elementoVariante.a][numeroVariaveis+1] - Yn[elementoVariante.b][numeroVariaveis+1];
+      elementoCL.jt0 = elementoCL.vt0/PO_CAPACITOR;
+    }
+    else if (elementoCL.nome[0] == 'L')
+    {
+      elementoCL.vt0 = Yn[elementoVariante.a][numeroVariaveis+1] - Yn[elementoVariante.b][numeroVariaveis+1];
+      elementoCL.jt0 = Yn[elementoVariante.x][numeroVariaveis+1];
+    }
+  }
+}/*calcular jt0 e vt0*/
 
 /* Rotina que monta as estampas dos elementos invariantes do circuito */
-void MontarEstampasInvariantes(unsigned pontoOp)
+void MontarEstampasInvariantes()
 {
 	for (i=1; i<=numeroElementos; i++)
 	{
@@ -714,7 +752,14 @@ int main(void)
     fprintf(arquivoSaida, " %s", lista[i]);
   fprintf(arquivoSaida, "\n");
 
-  MontarEstampasInvariantes(0); /*0 pois nao e PontoOp por enquanto*/
+  MontarEstampasInvariantes();
+  MontarEstampasVariantes(elementosVariantes, 0, contadorElementosVariantes, passo_simulacao);
+  if (ResolverSistema()) /*calculo do ponto de operacao*/
+  {
+    getch();
+    exit(0);
+  }
+  CalcularJt0EVt0(contadorElementosVariantes); /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
 
   /*Analise no tempo*/
   for (tempo_atual = 0; tempo_atual < tempo_simulacao; tempo_atual += passo_simulacao)
@@ -729,6 +774,7 @@ int main(void)
       getch();
       exit(0);
     }
+    CalcularJt0EVt0(contadorElementosVariantes);  /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
 
     /*Escreve no arquivo de saida*/
     fprintf(arquivoSaida,"%lg", tempo_atual);
