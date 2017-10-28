@@ -96,6 +96,7 @@ double tempo_atual;
 
 elemento netlist[MAX_ELEM]; /* Netlist */
 int elementosVariantes[MAX_ELEM];
+int elementosNaoLineares[MAX_ELEM];
 
 int
   numeroElementos, /* Elementos */
@@ -104,6 +105,7 @@ int
   i,j,k;
 
 unsigned contadorElementosVariantes;
+unsigned contadorElementosNaoLineares;
 
 char
 /* Foram colocados limites nos formatos de leitura para alguma protecao
@@ -121,7 +123,8 @@ double
   g,
   Yn[MAX_NOS+1][MAX_NOS+2],
   YnAnterior[MAX_NOS+1][MAX_NOS+2],
-  YnInvariantes[MAX_NOS+1][MAX_NOS+2];
+  YnInvariantes[MAX_NOS+1][MAX_NOS+2],
+  solucaoAnterior[MAX_NOS+2];
 
 /*  Rotina para Resolucao de sistema de equacoes lineares.
    Metodo de Gauss-Jordan com condensacao pivotal */
@@ -186,11 +189,13 @@ int NumerarNo(char *nome)
 
 void ArmazenarResultadoAnterior()
 {
-  for (i=0; i<=numeroVariaveis; i++)
-  {
-    for (j=0; j<=numeroVariaveis+1; j++)
-      YnAnterior[i][j] = Yn[i][j];
-  }
+  // for (i=0; i<=numeroVariaveis; i++)
+  // {
+  //   for (j=0; j<=numeroVariaveis+1; j++)
+  //     YnAnterior[i][j] = Yn[i][j];
+  // }
+  for (i=0; i<=numeroVariaveis+1; i++)
+    solucaoAnterior[i] = Yn[i][numeroVariaveis+1]; /*pega a ultima coluna de Yn: solucao do sistema*/
 }
 
 void CopiarEstampaInvariante()
@@ -211,8 +216,31 @@ void ZerarSistema()
   }
 }
 
+void MostrarSistema ()
+{
+  for (k=1; k<=numeroVariaveis; k++)
+  {
+  	for (j=1; j<=numeroVariaveis+1; j++)
+  		if (Yn[k][j]!=0)
+  			printf("%+4.3f ",Yn[k][j]);
+  		else printf(" ..... ");
+  	printf("\n");
+  }
+  getch();
+}
+
+void MostrarSolucaoAtual ()
+{
+  	for (j=1; j<=numeroVariaveis; j++)
+  	 printf("%+4.3f ",Yn[j][numeroVariaveis+1]);
+  	printf("\n");
+  getch();
+}
+
 void LerNetlist (FILE *arquivo)
 {
+  contadorElementosVariantes = 0;
+  contadorElementosNaoLineares = 0;
   printf("Lendo netlist:\n");
   fgets(txt,MAX_LINHA,arquivo);
   printf("Titulo: %s",txt);
@@ -327,11 +355,17 @@ void LerNetlist (FILE *arquivo)
     else if(tipo=='N')
     {
 
+
+      elementosNaoLineares[contadorElementosNaoLineares] = numeroElementos;
+      contadorElementosNaoLineares ++;
     }
     /* CHAVE */
     else if(tipo=='$')
     {
 
+
+      elementosNaoLineares[contadorElementosNaoLineares] = numeroElementos;
+      contadorElementosNaoLineares ++;
     }
     /* COMENTÁRIO */
     else if (tipo=='*')
@@ -361,8 +395,8 @@ void LerNetlist (FILE *arquivo)
   fclose(arquivo);
 }/*LerNetlist*/
 
-/*Pega apenas as fontes variantes do netlist e monta a estampa de acordo com o tempo atual da simulacao*/
-void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned quantidade, double passo_simulacao) /*vai usar tambem o YnAnterior para C e L*/
+/*Pega apenas as fontes variantes, capacitores e indutores do netlist e monta a estampa de acordo com o tempo atual da simulacao*/
+void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned quantidade, double passo_simulacao, unsigned pontoOperacao)
 {
   unsigned contador, ciclos, ciclos_passados;
   elemento elementoVariante;
@@ -383,7 +417,12 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
            coefLin,
            t1,
            t2;
+
+    if (pontoOperacao == 1)
+      tempo = 0.0; /*fontes variantes calculadas em 0.0 para ponto de operacao*/
+
     CopiarEstampaInvariante();
+
     for (contador = 0; contador < quantidade; contador++)
     {
       elementoVariante = netlist[elementos[contador]];
@@ -398,7 +437,7 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
         amortecimento = elementoVariante.fonte_seno.amortecimento;
         ciclos = elementoVariante.fonte_seno.ciclos;
         ciclos_passados = freq*tempo;
-          printf("Ciclos %u Ciclos passados %u\n", ciclos, ciclos_passados);
+        //printf("Ciclos %u Ciclos passados %u\n", ciclos, ciclos_passados);
         if (ciclos_passados >= ciclos)
           elementoVariante.valor = 0;
         else
@@ -470,7 +509,7 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
       /*CAPACITOR*/
       else if (elementoVariante.nome[0]=='C')
       {
-        if (tempo == 0)
+        if (pontoOperacao == 1) /*se é análise de ponto de operação*/
         {
           // Vira um R de 1GOhms
           g = 1/PO_CAPACITOR;
@@ -481,7 +520,7 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
         }
         else
         {
-          g = (2*netlist[i].valor)/passo_simulacao;
+          g = (2*elementoVariante.valor)/passo_simulacao;
           Yn[elementoVariante.a][elementoVariante.a] += g;
     			Yn[elementoVariante.b][elementoVariante.b] += g;
     			Yn[elementoVariante.a][elementoVariante.b] -= g;
@@ -494,59 +533,65 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
       /*INDUTOR*/
       else if (elementoVariante.nome[0]=='L')
       {
-        if (tempo == 0)
+        if (pontoOperacao == 1) /*se é análise de ponto de operação*/
         {
           // Vira um R de 1nOhms
     			g = 1/PO_INDUTOR;
-    			Yn[netlist[i].a][netlist[i].x] += 1;
-    			Yn[netlist[i].b][netlist[i].x] -= 1;
-    			Yn[netlist[i].x][netlist[i].a] -= 1;
-    			Yn[netlist[i].x][netlist[i].b] += 1;
-    			Yn[netlist[i].x][netlist[i].x] += g;
+    			Yn[elementoVariante.a][elementoVariante.x] += 1;
+    			Yn[elementoVariante.b][elementoVariante.x] -= 1;
+    			Yn[elementoVariante.x][elementoVariante.a] -= 1;
+    			Yn[elementoVariante.x][elementoVariante.b] += 1;
+    			Yn[elementoVariante.x][elementoVariante.x] += g;
         }
         else
         {
           /*depende do passo e do valor anterior*/
-          g = (2*netlist[i].valor)/passo_simulacao;
-          Yn[netlist[i].a][netlist[i].x] += 1;
-          Yn[netlist[i].b][netlist[i].x] -= 1;
-          Yn[netlist[i].x][netlist[i].a] -= 1;
-          Yn[netlist[i].x][netlist[i].b] += 1;
-          Yn[netlist[i].x][netlist[i].x] += g;
+          g = (2*elementoVariante.valor)/passo_simulacao;
+          Yn[elementoVariante.a][elementoVariante.x] += 1;
+          Yn[elementoVariante.b][elementoVariante.x] -= 1;
+          Yn[elementoVariante.x][elementoVariante.a] -= 1;
+          Yn[elementoVariante.x][elementoVariante.b] += 1;
+          Yn[elementoVariante.x][elementoVariante.x] += g;
           Yn[elementoVariante.x][numeroVariaveis+1]+= g*(elementoVariante.jt0) + elementoVariante.vt0;
         }
       }
     }/*for*/
 
-    /*DEBUG*/
-    // printf("Sistema apos a estampa de tempo %lg\n",tempo);
-  	// for (k=1; k<=numeroVariaveis; k++)
-  	// {
-  	// 	for (j=1; j<=numeroVariaveis+1; j++)
-  	// 		if (Yn[k][j]!=0)
-  	// 			printf("%+4.3f ",Yn[k][j]);
-  	// 		else printf(" ..... ");
-  	// 	printf("\n");
-  	// }
-  	// getch();
-    /*END DEBUG*/
+    #ifdef  DEBUG
+      printf("Sistema apos montagem das estampas variantes no tempo. t = %g\n", tempo);
+      MostrarSistema();
+    #endif
 }/*MontarEstampasVariantes*/
 
-void CalcularJt0EVt0 (unsigned quantidade)
+void CalcularJt0EVt0 (unsigned quantidade, int elementos[MAX_ELEM], unsigned pontoOperacao, double passo_simulacao)
 {
   unsigned contador;
+  elemento elementoCL;
+  double resistencia, tensaoAtual, correnteAtual;
   for (contador = 0; contador < quantidade; contador++)
   {
-    elementoCL = netlist[contador];
+    elementoCL = netlist[elementos[contador]];
     if (elementoCL.nome[0] == 'C')
     {
-      elementoCL.vt0 = Yn[elementoVariante.a][numeroVariaveis+1] - Yn[elementoVariante.b][numeroVariaveis+1];
-      elementoCL.jt0 = elementoCL.vt0/PO_CAPACITOR;
+      tensaoAtual = solucaoAnterior[elementoCL.a] - solucaoAnterior[elementoCL.b];
+      if (pontoOperacao == 1)
+      {
+        correnteAtual = tensaoAtual/PO_CAPACITOR;
+        //printf("Corrente capacitor: %lg\n", elementoCL.jt0);
+      }
+      else
+      {
+        resistencia = passo_simulacao/(2*elementoCL.valor);
+        correnteAtual = tensaoAtual/(resistencia) - (1/resistencia)*(elementoCL.vt0) + elementoCL.jt0;
+      }
+      elementoCL.vt0 = tensaoAtual;
+      elementoCL.jt0 = correnteAtual;
+      //printf("Tensao capacitor: %lg\n", elementoCL.vt0);
     }
-    else if (elementoCL.nome[0] == 'L')
+    else if (elementoCL.nome[0] == 'L') /*ainda pode dar merda*/
     {
-      elementoCL.vt0 = Yn[elementoVariante.a][numeroVariaveis+1] - Yn[elementoVariante.b][numeroVariaveis+1];
-      elementoCL.jt0 = Yn[elementoVariante.x][numeroVariaveis+1];
+      elementoCL.vt0 = solucaoAnterior[elementoCL.a] - solucaoAnterior[elementoCL.b];
+      elementoCL.jt0 = solucaoAnterior[elementoCL.x];
     }
   }
 }/*calcular jt0 e vt0*/
@@ -554,6 +599,7 @@ void CalcularJt0EVt0 (unsigned quantidade)
 /* Rotina que monta as estampas dos elementos invariantes do circuito */
 void MontarEstampasInvariantes()
 {
+  //ZerarSistema();
 	for (i=1; i<=numeroElementos; i++)
 	{
 		tipo=netlist[i].nome[0];
@@ -717,6 +763,29 @@ void AcrescentarVariaveis()
   }
 }/*AcrescentarVariaveis*/
 
+void ResolverPontoOperacao (unsigned contadorVariantes, unsigned contadorNaoLineares, double passo_simulacao)
+{
+  MontarEstampasVariantes(elementosVariantes, 0, contadorVariantes, passo_simulacao, 1); /*ponto de operacao*/
+  #ifdef DEBUG
+    MostrarSistema();
+  #endif
+  if (contadorNaoLineares == 0) /*se nao tem elementos nao lineares, resolve normalmente*/
+  {
+    printf("Entra no if de nao tem elementos nao lineares\n");
+    if (ResolverSistema()) /*calculo do ponto de operacao*/
+    {
+      getch();
+      exit(0);
+    }
+    ArmazenarResultadoAnterior(); /*armazeno as solucoes anteriores num vetor solucaoAnterior*/
+    CalcularJt0EVt0(contadorVariantes, elementosVariantes, 1, passo_simulacao); /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
+  }
+  else /*se tiver elementos nao lineares, resolve com NR*/
+  {
+    /*Newton-Raphson que depende da solucao anterior*/
+  }
+} /*ResolverPontoOperacao*/
+
 int main(void)
 {
   system("cls");
@@ -753,20 +822,18 @@ int main(void)
   fprintf(arquivoSaida, "\n");
 
   MontarEstampasInvariantes();
-  MontarEstampasVariantes(elementosVariantes, 0, contadorElementosVariantes, passo_simulacao);
-  if (ResolverSistema()) /*calculo do ponto de operacao*/
-  {
-    getch();
-    exit(0);
-  }
-  CalcularJt0EVt0(contadorElementosVariantes); /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
+  CopiarEstampaInvariante();
+  printf("Sistema apos estampas invariantes:\n");
+  MostrarSistema();
+  ResolverPontoOperacao(contadorElementosVariantes, contadorElementosNaoLineares, passo_simulacao);
+  MostrarSolucaoAtual();
 
   /*Analise no tempo*/
-  for (tempo_atual = 0; tempo_atual < tempo_simulacao; tempo_atual += passo_simulacao)
+  for (tempo_atual = passo_simulacao; tempo_atual < tempo_simulacao; tempo_atual += passo_simulacao) /*começa em 0 ou em 0 + passo?*/
   {
-    MontarEstampasVariantes(elementosVariantes, tempo_atual, contadorElementosVariantes);
+    MontarEstampasVariantes(elementosVariantes, tempo_atual, contadorElementosVariantes, passo_simulacao, 0);
 
-    /*Newton-Raphson para tempo atual com o ResolverSistema() varias vezes ate convergir*/
+    /*Newton-Raphson com parametros do sistema inicial (ponto de operacao)*/
 
     /* Resolve o sistema */
     if (ResolverSistema())
@@ -774,7 +841,8 @@ int main(void)
       getch();
       exit(0);
     }
-    CalcularJt0EVt0(contadorElementosVariantes);  /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
+    CalcularJt0EVt0(contadorElementosVariantes, elementosVariantes, 0, passo_simulacao);  /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
+    ArmazenarResultadoAnterior();
 
     /*Escreve no arquivo de saida*/
     fprintf(arquivoSaida,"%lg", tempo_atual);
