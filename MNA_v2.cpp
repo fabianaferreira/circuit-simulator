@@ -513,6 +513,7 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
         {
           // Vira um R de 1GOhms
           g = 1/PO_CAPACITOR;
+          //printf("Condutancia capacitor: %+4.20f\n", g);
     			Yn[elementoVariante.a][elementoVariante.a] += g;
     			Yn[elementoVariante.b][elementoVariante.b] += g;
     			Yn[elementoVariante.a][elementoVariante.b] -= g;
@@ -566,32 +567,33 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
 void CalcularJt0EVt0 (unsigned quantidade, int elementos[MAX_ELEM], unsigned pontoOperacao, double passo_simulacao)
 {
   unsigned contador;
-  elemento elementoCL;
+  elemento *elementoCL;
   double resistencia, tensaoAtual, correnteAtual;
   for (contador = 0; contador < quantidade; contador++)
   {
-    elementoCL = netlist[elementos[contador]];
-    if (elementoCL.nome[0] == 'C')
+    elementoCL = &(netlist[elementos[contador]]);
+    if (elementoCL->nome[0] == 'C')
     {
-      tensaoAtual = solucaoAnterior[elementoCL.a] - solucaoAnterior[elementoCL.b];
+      tensaoAtual = solucaoAnterior[elementoCL->a] - solucaoAnterior[elementoCL->b];
       if (pontoOperacao == 1)
       {
         correnteAtual = tensaoAtual/PO_CAPACITOR;
-        //printf("Corrente capacitor: %lg\n", elementoCL.jt0);
+        printf("Corrente capacitor: %lg\n", netlist[elementos[contador]].jt0);
       }
       else
       {
-        resistencia = passo_simulacao/(2*elementoCL.valor);
-        correnteAtual = tensaoAtual/(resistencia) - (1/resistencia)*(elementoCL.vt0) + elementoCL.jt0;
+        resistencia = passo_simulacao/(2*elementoCL->valor);
+        correnteAtual = tensaoAtual/(resistencia) - (1/resistencia)*(elementoCL->vt0) - elementoCL->jt0;
       }
-      elementoCL.vt0 = tensaoAtual;
-      elementoCL.jt0 = correnteAtual;
+      elementoCL->vt0 = tensaoAtual;
+      elementoCL->jt0 = correnteAtual;
+      printf("Corrente capacitor: %lg\n", netlist[elementos[contador]].jt0);
       //printf("Tensao capacitor: %lg\n", elementoCL.vt0);
     }
-    else if (elementoCL.nome[0] == 'L') /*ainda pode dar merda*/
+    else if (elementoCL->nome[0] == 'L') /*ainda pode dar merda*/
     {
-      elementoCL.vt0 = solucaoAnterior[elementoCL.a] - solucaoAnterior[elementoCL.b];
-      elementoCL.jt0 = solucaoAnterior[elementoCL.x];
+      elementoCL->vt0 = solucaoAnterior[elementoCL->a] - solucaoAnterior[elementoCL->b];
+      elementoCL->jt0 = solucaoAnterior[elementoCL->x];
     }
   }
 }/*calcular jt0 e vt0*/
@@ -821,6 +823,7 @@ int main(void)
     fprintf(arquivoSaida, " %s", lista[i]);
   fprintf(arquivoSaida, "\n");
 
+  ZerarSistema();
   MontarEstampasInvariantes();
   CopiarEstampaInvariante();
   printf("Sistema apos estampas invariantes:\n");
@@ -841,8 +844,8 @@ int main(void)
       getch();
       exit(0);
     }
-    CalcularJt0EVt0(contadorElementosVariantes, elementosVariantes, 0, passo_simulacao);  /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
     ArmazenarResultadoAnterior();
+    CalcularJt0EVt0(contadorElementosVariantes, elementosVariantes, 0, passo_simulacao);  /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
 
     /*Escreve no arquivo de saida*/
     fprintf(arquivoSaida,"%lg", tempo_atual);
