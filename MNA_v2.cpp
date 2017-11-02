@@ -444,7 +444,7 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
           elementoVariante.valor = nivel_dc +
                                    amplitude*(exp(-amortecimento*(tempo - atraso)))*(sin(2*PI*freq*(tempo - atraso) + (PI*defasagem)/180));
       }
-      /*Tá dando merda, tem que testar os extremos*/
+      /*Tá dando merda, tem que tudo, inclusive os extremos*/
       else if (strcmp(netlist[i].tipo_fonte, "PULSE") == 0)
       {
         amplitude1 = elementoVariante.fonte_pulso.amplitude1;
