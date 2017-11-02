@@ -444,6 +444,7 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
           elementoVariante.valor = nivel_dc +
                                    amplitude*(exp(-amortecimento*(tempo - atraso)))*(sin(2*PI*freq*(tempo - atraso) + (PI*defasagem)/180));
       }
+      /*Tá dando merda, tem que testar os extremos*/
       else if (strcmp(netlist[i].tipo_fonte, "PULSE") == 0)
       {
         amplitude1 = elementoVariante.fonte_pulso.amplitude1;
@@ -574,27 +575,53 @@ void CalcularJt0EVt0 (unsigned quantidade, int elementos[MAX_ELEM], unsigned pon
     elementoCL = &(netlist[elementos[contador]]);
     if (elementoCL->nome[0] == 'C')
     {
-      tensaoAtual = solucaoAnterior[elementoCL->a] - solucaoAnterior[elementoCL->b];
+      /*tratamento do terra*/
+      if (elementoCL->a == 0)
+      {
+        tensaoAtual = - solucaoAnterior[elementoCL->b];
+        solucaoAnterior[elementoCL->a] = 0.0;
+      }
+
+      else if (elementoCL->b == 0)
+      {
+        tensaoAtual = solucaoAnterior[elementoCL->a];
+        solucaoAnterior[elementoCL->b] = 0.0;
+      }
+      else
+        tensaoAtual = solucaoAnterior[elementoCL->a] - solucaoAnterior[elementoCL->b];
+      /*tratamento do terra*/
+
       if (pontoOperacao == 1)
       {
         correnteAtual = tensaoAtual/PO_CAPACITOR;
-        printf("Corrente capacitor: %lg\n", netlist[elementos[contador]].jt0);
+        //printf("Corrente capacitor: %lg\n", netlist[elementos[contador]].jt0);
       }
       else
       {
         resistencia = passo_simulacao/(2*elementoCL->valor);
         correnteAtual = tensaoAtual/(resistencia) - (1/resistencia)*(elementoCL->vt0) - elementoCL->jt0;
       }
-      elementoCL->vt0 = tensaoAtual;
-      elementoCL->jt0 = correnteAtual;
-      printf("Corrente capacitor: %lg\n", netlist[elementos[contador]].jt0);
+      //printf("Corrente capacitor: %lg\n", netlist[elementos[contador]].jt0);
       //printf("Tensao capacitor: %lg\n", elementoCL.vt0);
     }
     else if (elementoCL->nome[0] == 'L') /*ainda pode dar merda*/
     {
-      elementoCL->vt0 = solucaoAnterior[elementoCL->a] - solucaoAnterior[elementoCL->b];
-      elementoCL->jt0 = solucaoAnterior[elementoCL->x];
+      if (elementoCL->a == 0)
+      {
+        tensaoAtual = - solucaoAnterior[elementoCL->b];
+        solucaoAnterior[elementoCL->a] = 0.0;
+      }
+      else if (elementoCL->b == 0)
+      {
+        tensaoAtual = solucaoAnterior[elementoCL->a];
+        solucaoAnterior[elementoCL->b] = 0.0;
+      }
+      else
+        tensaoAtual = solucaoAnterior[elementoCL->a] - solucaoAnterior[elementoCL->b];
+      correnteAtual = solucaoAnterior[elementoCL->x];
     }
+    elementoCL->vt0 = tensaoAtual;
+    elementoCL->jt0 = correnteAtual;
   }
 }/*calcular jt0 e vt0*/
 
