@@ -75,6 +75,13 @@ typedef struct pulse /* STRUCT PULSE */
   unsigned int ciclos;
 } pulse;
 
+typedef struct chave
+{
+  double gon,
+         goff,
+         vLim;
+} chave;
+
 /*Elemento possui atributos de fontes, pois há tipos diferentes, com parametros diferentes*/
 typedef struct elemento /* Elemento do netlist */
 {
@@ -85,6 +92,7 @@ typedef struct elemento /* Elemento do netlist */
   sine fonte_seno;
   dc fonte_dc;
   pulse fonte_pulso;
+  chave chaveResistiva;
   double jt0, vt0;
 } elemento;
 
@@ -360,14 +368,24 @@ void LerNetlist (FILE *arquivo)
     {
 
 
+      elementosVariantes[contadorElementosVariantes] = numeroElementos;
+      contadorElementosVariantes++;
       elementosNaoLineares[contadorElementosNaoLineares] = numeroElementos;
       contadorElementosNaoLineares ++;
+
     }
     /* CHAVE */
     else if(tipo=='$')
     {
+      sscanf(p,"%10s%10s%10s%10s%lg%lg%lg",na,nb,nc,nd, &netlist[numeroElementos].gon, &netlist[numeroElementos].goff, &netlist[numeroElementos].vLim);
+      printf("%s %s %s cntrl1:%s cntrl2:%s \n",netlist[numeroElementos].nome,na,nb,nc,nd);
+      netlist[numeroElementos].a=NumerarNo(na);
+      netlist[numeroElementos].b=NumerarNo(nb);
+      netlist[numeroElementos].c=NumerarNo(nc);
+      netlist[numeroElementos].d=NumerarNo(nd);
 
-
+      elementosVariantes[contadorElementosVariantes] = numeroElementos;
+      contadorElementosVariantes++;
       elementosNaoLineares[contadorElementosNaoLineares] = numeroElementos;
       contadorElementosNaoLineares ++;
     }
@@ -417,7 +435,7 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
          tempo_descida,
          tempo_ligada,
          periodo,
-         tempo_normalizado;
+         tensaoAtual;
     double coefAng,
            coefLin,
            t1,
@@ -508,8 +526,8 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
       }
 
       /*VAO DEPENDER DO PASSO E DO VALOR ANTERIOR, SEJA PONTOOP OU RESULTADO DO NEWTON-RAPHSON*/
-      /*CAPACITOR*/
-      else if (elementoVariante.nome[0]=='C')
+
+      else if (elementoVariante.nome[0]=='C') /*capacitor: elemento variante no tempo*/
       {
         if (pontoOperacao == 1) /*se é análise de ponto de operação*/
         {
@@ -532,9 +550,7 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
           Yn[elementoVariante.b][numeroVariaveis+1]-= g*(elementoVariante.vt0) + elementoVariante.jt0;
         }
       }
-
-      /*INDUTOR*/
-      else if (elementoVariante.nome[0]=='L')
+      else if (elementoVariante.nome[0]=='L') /*indutor: elemento variante no tempo*/
       {
         if (pontoOperacao == 1) /*se é análise de ponto de operação*/
         {
@@ -558,6 +574,24 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
           Yn[elementoVariante.b][numeroVariaveis+1]+= (g*(elementoVariante.vt0) + elementoVariante.jt0);
         }
       }
+      else if (elementoVariante.nome[0] == '$') /*chave: elemento nao-linear*/
+      {
+        tensaoAtual = solucaoAnterior[elementoVariante.c] - solucaoAnterior[elementoVariante.d];
+        if (tensaoAtual <= elementoVariante.vLim)
+        {
+          Yn[elementoVariante.a][elementoVariante.a]+=elementoVariante.goff;
+          Yn[elementoVariante.b][elementoVariante.b]+=elementoVariante.goff;
+          Yn[elementoVariante.a][elementoVariante.b]-=elementoVariante.goff;
+          Yn[elementoVariante.b][elementoVariante.a]-=elementoVariante.goff;
+        }
+        else
+        {
+          Yn[elementoVariante.a][elementoVariante.a]+=elementoVariante.gon;
+          Yn[elementoVariante.b][elementoVariante.b]+=elementoVariante.gon;
+          Yn[elementoVariante.a][elementoVariante.b]-=elementoVariante.gon;
+          Yn[elementoVariante.b][elementoVariante.a]-=elementoVariante.gon;
+        }
+      }
     }/*for*/
 
     #ifdef  DEBUG
@@ -566,7 +600,7 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
     #endif
 }/*MontarEstampasVariantes*/
 
-void CalcularJt0EVt0 (unsigned quantidade, int elementos[MAX_ELEM], unsigned pontoOperacao, double passo_simulacao)
+void CalcularMemorias (unsigned quantidade, int elementos[MAX_ELEM], unsigned pontoOperacao, double passo_simulacao)
 {
   unsigned contador;
   elemento *elementoCL;
@@ -808,7 +842,7 @@ void ResolverPontoOperacao (unsigned contadorVariantes, unsigned contadorNaoLine
       exit(0);
     }
     ArmazenarResultadoAnterior(); /*armazeno as solucoes anteriores num vetor solucaoAnterior*/
-    CalcularJt0EVt0(contadorVariantes, elementosVariantes, 1, passo_simulacao); /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
+    CalcularMemorias(contadorVariantes, elementosVariantes, 1, passo_simulacao); /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
   }
   else /*se tiver elementos nao lineares, resolve com NR*/
   {
@@ -878,7 +912,7 @@ int main(void)
     if (temCapacitorOuIndutor == 1) /*COMO FAZER ISSO DE UMA FORMA MAIS ESPERTA?*/
     {
       ArmazenarResultadoAnterior();
-      CalcularJt0EVt0(contadorElementosVariantes, elementosVariantes, 0, passo_simulacao);  /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
+      CalcularMemorias(contadorElementosVariantes, elementosVariantes, 0, passo_simulacao);  /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
       //ZerarResultadoAnterior();
     }
 
