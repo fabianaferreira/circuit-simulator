@@ -1,6 +1,5 @@
 /*
 Elementos aceitos e linhas do netlist:
-
 Resistor:                     R<nome> <no+> <no-> <resistencia>
 VCCS:                         G<nome> <io+> <io-> <vi+> <vi-> <transcondutancia>
 VCVS:                         E<nome> <vo+> <vo-> <vi+> <vi-> <ganho de tensao>
@@ -15,13 +14,10 @@ Indutor:                      L<nome> <no1> <no2> <indutancia>
 Transformador ideal:          K<nome> <noa> <nob> <noc> <nod> <n>
 Chave:                        $<nome> <noa> <nob> <noContc> <noContd> <gon> <goff> <vref>
 Comentario:                   *<comentario>
-
-
 Parametros:
 Fonte contínua: DC <valor>
 Fonte senoidal: SIN <nível contínuo> <amplitude> <frequência em Hz> <atraso> <amortecimento> <defasagem em graus> <número de ciclos>
 Fonte pulsada: PULSE <amplitude 1> <amplitude 2> <atraso> <tempo de subida> <tempo de descida> <tempo ligada> <período> <número de ciclos>
-
 As fontes F e H tem o ramo de entrada em curto
 O amplificador operacional ideal tem a saida suspensa
 Os nos podem ser nomes
@@ -112,8 +108,8 @@ int
   numeroNos, /* Nos */
   i,j,k;
 
-unsigned contadorElementosVariantes;
-unsigned contadorElementosNaoLineares;
+unsigned contadorElementosVariantes = 0;
+unsigned contadorElementosNaoLineares = 0;
 unsigned short temCapacitorOuIndutor = 0;
 
 char
@@ -377,7 +373,7 @@ void LerNetlist (FILE *arquivo)
     /* CHAVE */
     else if(tipo=='$')
     {
-      sscanf(p,"%10s%10s%10s%10s%lg%lg%lg",na,nb,nc,nd, &netlist[numeroElementos].gon, &netlist[numeroElementos].goff, &netlist[numeroElementos].vLim);
+      sscanf(p,"%10s%10s%10s%10s%lg%lg%lg",na,nb,nc,nd, &netlist[numeroElementos].chaveResistiva.gon, &netlist[numeroElementos].chaveResistiva.goff, &netlist[numeroElementos].chaveResistiva.vLim);
       printf("%s %s %s cntrl1:%s cntrl2:%s \n",netlist[numeroElementos].nome,na,nb,nc,nd);
       netlist[numeroElementos].a=NumerarNo(na);
       netlist[numeroElementos].b=NumerarNo(nb);
@@ -418,7 +414,7 @@ void LerNetlist (FILE *arquivo)
 }/*LerNetlist*/
 
 /*Pega apenas as fontes variantes, capacitores e indutores do netlist e monta a estampa de acordo com o tempo atual da simulacao*/
-void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned quantidade, double passo_simulacao, unsigned pontoOperacao)
+void MontarEstampasVariantes (double tempo, double passo_simulacao, unsigned pontoOperacao)
 {
   //printf("Funcao MontarEstampasVariantes\n");
   unsigned contador, ciclos, ciclos_passados;
@@ -446,9 +442,9 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
 
     CopiarEstampaInvariante();
 
-    for (contador = 0; contador < quantidade; contador++)
+    for (contador = 0; contador < contadorElementosVariantes; contador++)
     {
-      elementoVariante = netlist[elementos[contador]];
+      elementoVariante = netlist[elementosVariantes[contador]];
       /*FONTE DE CORRENTE*/
       if (strcmp(elementoVariante.tipo_fonte, "SIN") == 0)
       {
@@ -577,19 +573,19 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
       else if (elementoVariante.nome[0] == '$') /*chave: elemento nao-linear*/
       {
         tensaoAtual = solucaoAnterior[elementoVariante.c] - solucaoAnterior[elementoVariante.d];
-        if (tensaoAtual <= elementoVariante.vLim)
+        if (tensaoAtual <= elementoVariante.chaveResistiva.vLim)
         {
-          Yn[elementoVariante.a][elementoVariante.a]+=elementoVariante.goff;
-          Yn[elementoVariante.b][elementoVariante.b]+=elementoVariante.goff;
-          Yn[elementoVariante.a][elementoVariante.b]-=elementoVariante.goff;
-          Yn[elementoVariante.b][elementoVariante.a]-=elementoVariante.goff;
+          Yn[elementoVariante.a][elementoVariante.a]+=elementoVariante.chaveResistiva.goff;
+          Yn[elementoVariante.b][elementoVariante.b]+=elementoVariante.chaveResistiva.goff;
+          Yn[elementoVariante.a][elementoVariante.b]-=elementoVariante.chaveResistiva.goff;
+          Yn[elementoVariante.b][elementoVariante.a]-=elementoVariante.chaveResistiva.goff;
         }
         else
         {
-          Yn[elementoVariante.a][elementoVariante.a]+=elementoVariante.gon;
-          Yn[elementoVariante.b][elementoVariante.b]+=elementoVariante.gon;
-          Yn[elementoVariante.a][elementoVariante.b]-=elementoVariante.gon;
-          Yn[elementoVariante.b][elementoVariante.a]-=elementoVariante.gon;
+          Yn[elementoVariante.a][elementoVariante.a]+=elementoVariante.chaveResistiva.gon;
+          Yn[elementoVariante.b][elementoVariante.b]+=elementoVariante.chaveResistiva.gon;
+          Yn[elementoVariante.a][elementoVariante.b]-=elementoVariante.chaveResistiva.gon;
+          Yn[elementoVariante.b][elementoVariante.a]-=elementoVariante.chaveResistiva.gon;
         }
       }
     }/*for*/
@@ -600,14 +596,14 @@ void MontarEstampasVariantes (int elementos[MAX_ELEM], double tempo, unsigned qu
     #endif
 }/*MontarEstampasVariantes*/
 
-void CalcularMemorias (unsigned quantidade, int elementos[MAX_ELEM], unsigned pontoOperacao, double passo_simulacao)
+void CalcularMemorias (unsigned pontoOperacao, double passo_simulacao)
 {
   unsigned contador;
   elemento *elementoCL;
   double resistencia, tensaoAtual, correnteAtual;
-  for (contador = 0; contador < quantidade; contador++)
+  for (contador = 0; contador < contadorElementosVariantes; contador++)
   {
-    elementoCL = &(netlist[elementos[contador]]);
+    elementoCL = &(netlist[elementosVariantes[contador]]);
     if (elementoCL->nome[0] == 'C')
     {
       /*tratamento do terra*/
@@ -827,13 +823,13 @@ void AcrescentarVariaveis()
   }
 }/*AcrescentarVariaveis*/
 
-void ResolverPontoOperacao (unsigned contadorVariantes, unsigned contadorNaoLineares, double passo_simulacao)
+void ResolverPontoOperacao (double passo_simulacao)
 {
-  MontarEstampasVariantes(elementosVariantes, 0, contadorVariantes, passo_simulacao, 1); /*ponto de operacao*/
+  MontarEstampasVariantes(0, passo_simulacao, 1); /*ponto de operacao*/
   #ifdef DEBUG
     MostrarSistema();
   #endif
-  if (contadorNaoLineares == 0) /*se nao tem elementos nao lineares, resolve normalmente*/
+  if (contadorElementosNaoLineares == 0) /*se nao tem elementos nao lineares, resolve normalmente*/
   {
     printf("Entra no if de nao tem elementos nao lineares\n");
     if (ResolverSistema()) /*calculo do ponto de operacao*/
@@ -842,7 +838,7 @@ void ResolverPontoOperacao (unsigned contadorVariantes, unsigned contadorNaoLine
       exit(0);
     }
     ArmazenarResultadoAnterior(); /*armazeno as solucoes anteriores num vetor solucaoAnterior*/
-    CalcularMemorias(contadorVariantes, elementosVariantes, 1, passo_simulacao); /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
+    CalcularMemorias(1, passo_simulacao); /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
   }
   else /*se tiver elementos nao lineares, resolve com NR*/
   {
@@ -892,28 +888,38 @@ int main(void)
   MostrarSistema();
   if (temCapacitorOuIndutor == 1)
   {
-    ResolverPontoOperacao(contadorElementosVariantes, contadorElementosNaoLineares, passo_simulacao);
+    ResolverPontoOperacao(passo_simulacao);
     MostrarSolucaoAtual();
   }
 
   /*Analise no tempo*/
   for (tempo_atual = passo_simulacao; tempo_atual < tempo_simulacao; tempo_atual += passo_simulacao) /*começa em 0 ou em 0 + passo?*/
   {
-    MontarEstampasVariantes(elementosVariantes, tempo_atual, contadorElementosVariantes, passo_simulacao, 0);
+    MontarEstampasVariantes(tempo_atual, passo_simulacao, 0);
 
-    /*Newton-Raphson com parametros do sistema inicial (ponto de operacao)*/
-
-    /* Resolve o sistema */
-    if (ResolverSistema())
+    if (contadorElementosNaoLineares != 0)
     {
-      getch();
-      exit(0);
+      /*Newton-Raphson com parametros do sistema inicial (ponto de operacao)*/
+      if (temCapacitorOuIndutor == 1) /*COMO FAZER ISSO DE UMA FORMA MAIS ESPERTA?*/
+      {
+        ArmazenarResultadoAnterior();
+        CalcularMemorias(0, passo_simulacao);  /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
+        //ZerarResultadoAnterior();
+      }
     }
-    if (temCapacitorOuIndutor == 1) /*COMO FAZER ISSO DE UMA FORMA MAIS ESPERTA?*/
+    else
     {
-      ArmazenarResultadoAnterior();
-      CalcularMemorias(contadorElementosVariantes, elementosVariantes, 0, passo_simulacao);  /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
-      //ZerarResultadoAnterior();
+      /* Resolve o sistema */
+      if (ResolverSistema())
+      {
+        getch();
+        exit(0);
+      }
+      if (temCapacitorOuIndutor == 1) /*COMO FAZER ISSO DE UMA FORMA MAIS ESPERTA?*/
+      {
+        ArmazenarResultadoAnterior();
+        CalcularMemorias(0, passo_simulacao);  /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
+      }
     }
 
     /*Escreve no arquivo de saida*/
