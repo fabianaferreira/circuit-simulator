@@ -29,16 +29,21 @@ Os nos podem ser nomes
 #include <stdlib.h>
 #include <ctype.h>
 #include <math.h>
+#include <time.h>
 
-#define versao "1.0"
-#define MAX_LINHA 80
-#define MAX_TIPO_FONTE  5
-#define MAX_NOME 11
-#define MAX_ELEM 50
-#define MAX_NOS 50
-#define TOLG 1e-9
-#define PO_CAPACITOR  1e9
-#define PO_INDUTOR    1e-9
+#define versao              "1.0"
+#define MAX_LINHA           80
+#define MAX_TIPO_FONTE      5
+#define MAX_NOME            11
+#define MAX_ELEM            50
+#define MAX_NOS             50
+#define TOLG                1e-9
+#define PO_CAPACITOR        1e9
+#define PO_INDUTOR          1e-9
+#define MAX_ERRO_NR         1e-9
+#define X_ERRO              1
+#define MAX_ITERACOES       10
+#define MAX_INICIALIZACOES  5
 //#define DEBUG
 #define PI acos(-1.0)
 #define NOME_ARQUIVO_SAIDA "saida_simulacao.tab"
@@ -89,6 +94,7 @@ typedef struct elemento /* Elemento do netlist */
   dc fonte_dc;
   pulse fonte_pulso;
   chave chaveResistiva;
+  double numeroEspiras;
   double jt0, vt0;
 } elemento;
 
@@ -129,7 +135,9 @@ double
   Yn[MAX_NOS+1][MAX_NOS+2],
   YnAnterior[MAX_NOS+1][MAX_NOS+2],
   YnInvariantes[MAX_NOS+1][MAX_NOS+2],
-  solucaoAnterior[MAX_NOS+2];
+  solucaoAnterior[MAX_NOS+2],
+  newtonRaphsonAnterior[MAX_NOS+2],
+  erros[MAX_NOS+1];
 
 /*  Rotina para Resolucao de sistema de equacoes lineares.
    Metodo de Gauss-Jordan com condensacao pivotal */
@@ -198,10 +206,16 @@ void ArmazenarResultadoAnterior()
     solucaoAnterior[i] = Yn[i][numeroVariaveis+1]; /*pega a ultima coluna de Yn: solucao do sistema*/
 }
 
-void ZerarResultadoAnterior ()
+void ArmazenarNRAnterior()
 {
   for (i=0; i<=numeroVariaveis+1; i++)
-    Yn[i][numeroVariaveis+1] = 0; /*zera a ultima coluna de Yn: solucao do sistema*/
+    newtonRaphsonAnterior[i] = Yn[i][numeroVariaveis+1]; /*pega a ultima coluna de Yn: solucao do sistema*/
+}
+
+void ZerarNRAnterior ()
+{
+  for (i=0; i<=numeroVariaveis+1; i++)
+    newtonRaphsonAnterior[i] = 0;
 }
 
 void CopiarEstampaInvariante()
@@ -352,8 +366,9 @@ void LerNetlist (FILE *arquivo)
     /*TRANSFORMADOR IDEAL*/
     else if(tipo=='K')
     {
-      sscanf(p,"%10s%10s%10s%10s%lg",na,nb,nc,nd,&netlist[numeroElementos].valor);
-      printf("%s %s %s %s %s\n",netlist[numeroElementos].nome,na,nb,nc,nd);
+      printf("Entrei no if do transformador\n");
+      sscanf(p,"%10s%10s%10s%10s%lg",na,nb,nc,nd,&netlist[numeroElementos].numeroEspiras);
+      printf("%s %s %s %s %s %lg\n",netlist[numeroElementos].nome,na,nb,nc,nd, netlist[numeroElementos].numeroEspiras);
       netlist[numeroElementos].a=NumerarNo(na);
       netlist[numeroElementos].b=NumerarNo(nb);
       netlist[numeroElementos].c=NumerarNo(nc);
@@ -362,8 +377,6 @@ void LerNetlist (FILE *arquivo)
     /* RESISTOR LINEAR POR PARTES */
     else if(tipo=='N')
     {
-
-
       elementosVariantes[contadorElementosVariantes] = numeroElementos;
       contadorElementosVariantes++;
       elementosNaoLineares[contadorElementosNaoLineares] = numeroElementos;
@@ -373,6 +386,7 @@ void LerNetlist (FILE *arquivo)
     /* CHAVE */
     else if(tipo=='$')
     {
+      printf("Achei as chaves\n");
       sscanf(p,"%10s%10s%10s%10s%lg%lg%lg",na,nb,nc,nd, &netlist[numeroElementos].chaveResistiva.gon, &netlist[numeroElementos].chaveResistiva.goff, &netlist[numeroElementos].chaveResistiva.vLim);
       printf("%s %s %s cntrl1:%s cntrl2:%s \n",netlist[numeroElementos].nome,na,nb,nc,nd);
       netlist[numeroElementos].a=NumerarNo(na);
@@ -380,8 +394,6 @@ void LerNetlist (FILE *arquivo)
       netlist[numeroElementos].c=NumerarNo(nc);
       netlist[numeroElementos].d=NumerarNo(nd);
 
-      elementosVariantes[contadorElementosVariantes] = numeroElementos;
-      contadorElementosVariantes++;
       elementosNaoLineares[contadorElementosNaoLineares] = numeroElementos;
       contadorElementosNaoLineares ++;
     }
@@ -570,24 +582,6 @@ void MontarEstampasVariantes (double tempo, double passo_simulacao, unsigned pon
           Yn[elementoVariante.b][numeroVariaveis+1]+= (g*(elementoVariante.vt0) + elementoVariante.jt0);
         }
       }
-      else if (elementoVariante.nome[0] == '$') /*chave: elemento nao-linear*/
-      {
-        tensaoAtual = solucaoAnterior[elementoVariante.c] - solucaoAnterior[elementoVariante.d];
-        if (tensaoAtual <= elementoVariante.chaveResistiva.vLim)
-        {
-          Yn[elementoVariante.a][elementoVariante.a]+=elementoVariante.chaveResistiva.goff;
-          Yn[elementoVariante.b][elementoVariante.b]+=elementoVariante.chaveResistiva.goff;
-          Yn[elementoVariante.a][elementoVariante.b]-=elementoVariante.chaveResistiva.goff;
-          Yn[elementoVariante.b][elementoVariante.a]-=elementoVariante.chaveResistiva.goff;
-        }
-        else
-        {
-          Yn[elementoVariante.a][elementoVariante.a]+=elementoVariante.chaveResistiva.gon;
-          Yn[elementoVariante.b][elementoVariante.b]+=elementoVariante.chaveResistiva.gon;
-          Yn[elementoVariante.a][elementoVariante.b]-=elementoVariante.chaveResistiva.gon;
-          Yn[elementoVariante.b][elementoVariante.a]-=elementoVariante.chaveResistiva.gon;
-        }
-      }
     }/*for*/
 
     #ifdef  DEBUG
@@ -595,6 +589,134 @@ void MontarEstampasVariantes (double tempo, double passo_simulacao, unsigned pon
       MostrarSistema();
     #endif
 }/*MontarEstampasVariantes*/
+
+void InicializacaoRandomica()
+{
+	double valor;
+
+	srand ((unsigned)time(NULL));
+
+	printf ("Inicializacao Randomica\n");
+	for (i=1; i<=numeroVariaveis;i++)
+	{
+		if (erros[i] > MAX_ERRO_NR)
+		{
+			printf ("Erro maior\n");
+			if (i <= numeroNos)
+			{
+				valor = rand() % 20001;
+				valor -= 10000;
+				valor /= 1000.0;
+				printf ("i = %f\n", valor);
+			}
+			else
+			{
+				valor = rand() % 2001;
+				valor -= 1000;
+				valor /= 1000.0;
+				printf ("i = %f\n", valor);
+			}
+			YnAnterior[i][numeroVariaveis+1] = valor;
+		}
+		else
+			YnAnterior[i][numeroVariaveis+1] = Yn[i][numeroVariaveis+1];
+	}
+	printf ("\n");
+}
+
+void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pontoOperacao) /*muda os elementos nao-lineares de acordo com o resultado anterior*/
+{
+  unsigned contador;
+  elemento elementoNaoLinear;
+  double tensaoAtual;
+  /*gera a estampa novamente para ser alterada pelos elementos não-lineares*/
+  ZerarSistema();
+  CopiarEstampaInvariante();
+  MontarEstampasVariantes(tempo, passo_simulacao, pontoOperacao);
+
+  #ifdef  DEBUG
+    printf("Sistema remontado apos iteracao do NR\n");
+    MostrarSistema();
+  #endif
+
+  for (contador = 0; contador < contadorElementosNaoLineares; contador++)
+  {
+    elementoNaoLinear = netlist[elementosNaoLineares[contador]];
+    if (elementoNaoLinear.nome[0] == '$') /*chave: elemento nao-linear*/
+    {
+      if (elementoNaoLinear.c == 0)
+        newtonRaphsonAnterior[elementoNaoLinear.c] = 0;
+      else if (elementoNaoLinear.d == 0)
+        newtonRaphsonAnterior[elementoNaoLinear.d] = 0;
+
+      tensaoAtual = newtonRaphsonAnterior[elementoNaoLinear.c] - newtonRaphsonAnterior[elementoNaoLinear.d];
+      if (tensaoAtual <= elementoNaoLinear.chaveResistiva.vLim)
+      {
+        Yn[elementoNaoLinear.a][elementoNaoLinear.a]+=elementoNaoLinear.chaveResistiva.goff;
+        Yn[elementoNaoLinear.b][elementoNaoLinear.b]+=elementoNaoLinear.chaveResistiva.goff;
+        Yn[elementoNaoLinear.a][elementoNaoLinear.b]-=elementoNaoLinear.chaveResistiva.goff;
+        Yn[elementoNaoLinear.b][elementoNaoLinear.a]-=elementoNaoLinear.chaveResistiva.goff;
+      }
+      else
+      {
+        Yn[elementoNaoLinear.a][elementoNaoLinear.a]+=elementoNaoLinear.chaveResistiva.gon;
+        Yn[elementoNaoLinear.b][elementoNaoLinear.b]+=elementoNaoLinear.chaveResistiva.gon;
+        Yn[elementoNaoLinear.a][elementoNaoLinear.b]-=elementoNaoLinear.chaveResistiva.gon;
+        Yn[elementoNaoLinear.b][elementoNaoLinear.a]-=elementoNaoLinear.chaveResistiva.gon;
+      }
+    }
+  }/*for*/
+}/*MontarNewtonRaphson*/
+
+unsigned TestarConvergenciaNR () /*teste de convergencia*/
+{
+  int i;
+
+	for (i=1; i<=numeroVariaveis;i++)
+	{
+		if (fabs(Yn[i][numeroVariaveis+1]) > X_ERRO)
+		{
+			erros[i] = X_ERRO*fabs((Yn[i][numeroVariaveis+1]-newtonRaphsonAnterior[i])/Yn[i][numeroVariaveis+1]);
+		}
+		else
+		{
+			erros[i] = fabs(Yn[i][numeroVariaveis+1]-newtonRaphsonAnterior[i]);
+		}
+
+		if (erros[i] > MAX_ERRO_NR)
+			return 0;
+	}
+	return 1;
+}
+
+void ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned int pontoOperacao)
+{
+  unsigned convergiu;
+
+  ZerarSistema();
+  ZerarNRAnterior();
+
+  //Inicializacao das variaveis do sistema
+	for (i=1; i<=numeroVariaveis; i++)
+		YnAnterior[i][numeroVariaveis+1] = 0.1;
+
+  for (k=1; k < MAX_INICIALIZACOES; k++)
+  {
+    if (k == 1)
+      InicializacaoRandomica();
+    for (i=1; i < MAX_ITERACOES; i++)
+    {
+      /*Monta tudo que é linear e tudo que é não-linear com base no resultado anterior*/
+      MontarNewtonRaphson(tempo, passo_simulacao, pontoOperacao);
+      ResolverSistema();
+      convergiu = TestarConvergenciaNR();
+      if (convergiu == 1)
+        return;
+      ArmazenarNRAnterior();
+    }
+  }
+  printf("Nao converge de jeito nenhum\n");
+}/*ResolverNewtonRaphson*/
 
 void CalcularMemorias (unsigned pontoOperacao, double passo_simulacao)
 {
@@ -739,6 +861,18 @@ void MontarEstampasInvariantes()
 			YnInvariantes[netlist[i].x][netlist[i].c] += 1;
 			YnInvariantes[netlist[i].x][netlist[i].d] -= 1;
 		}
+    else if (tipo == 'K')
+    {
+      printf("Numero de espiras: %lg\n", netlist[i].numeroEspiras);
+      YnInvariantes[netlist[i].a][netlist[i].x] -= netlist[i].numeroEspiras;
+			YnInvariantes[netlist[i].b][netlist[i].x] += netlist[i].numeroEspiras;
+      YnInvariantes[netlist[i].c][netlist[i].x] += 1;
+      YnInvariantes[netlist[i].d][netlist[i].x] -= 1;
+			YnInvariantes[netlist[i].x][netlist[i].a] += netlist[i].numeroEspiras;
+			YnInvariantes[netlist[i].x][netlist[i].b] -= netlist[i].numeroEspiras;
+      YnInvariantes[netlist[i].x][netlist[i].c] -= 1;
+			YnInvariantes[netlist[i].x][netlist[i].d] += 1;
+    }
     #ifdef DEBUG
     		/* Opcional: Mostra o sistema apos a montagem da estampa */
     		printf("Sistema apos a estampa de %s\n",netlist[i].nome);
@@ -795,7 +929,7 @@ void AcrescentarVariaveis()
   for (i=1; i<=numeroElementos; i++)
   {
     tipo=netlist[i].nome[0];
-    if (tipo=='V' || tipo=='E' || tipo=='F' || tipo=='O')
+    if (tipo=='V' || tipo=='E' || tipo=='F' || tipo=='O' || tipo=='K')
     {
       numeroVariaveis++;
       if (numeroVariaveis>MAX_NOS)
@@ -889,6 +1023,8 @@ int main(void)
   if (temCapacitorOuIndutor == 1)
   {
     ResolverPontoOperacao(passo_simulacao);
+    // for (i=1; i<=numeroVariaveis; i++)
+  	// 	YnAnterior[i][numeroVariaveis+1] = 0;
     MostrarSolucaoAtual();
   }
 
@@ -900,6 +1036,7 @@ int main(void)
     if (contadorElementosNaoLineares != 0)
     {
       /*Newton-Raphson com parametros do sistema inicial (ponto de operacao)*/
+      ResolverNewtonRaphson(tempo_atual, passo_simulacao, 0);
       if (temCapacitorOuIndutor == 1) /*COMO FAZER ISSO DE UMA FORMA MAIS ESPERTA?*/
       {
         ArmazenarResultadoAnterior();
