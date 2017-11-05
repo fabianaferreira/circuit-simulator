@@ -42,8 +42,8 @@ Os nos podem ser nomes
 #define PO_INDUTOR          1e-9
 #define MAX_ERRO_NR         1e-9
 #define X_ERRO              1
-#define MAX_ITERACOES       50
-#define MAX_INICIALIZACOES  20
+#define MAX_ITERACOES       10
+#define MAX_INICIALIZACOES  50
 //#define DEBUG
 #define PI acos(-1.0)
 #define NOME_ARQUIVO_SAIDA "saida_simulacao.tab"
@@ -211,24 +211,28 @@ int NumerarNo(char *nome)
 
 void ArmazenarResultadoAnterior()
 {
+  unsigned i;
   for (i=0; i<=numeroVariaveis+1; i++)
     solucaoAnterior[i] = Yn[i][numeroVariaveis+1]; /*pega a ultima coluna de Yn: solucao do sistema*/
 }
 
 void ArmazenarNRAnterior()
 {
+  unsigned i;
   for (i=0; i<=numeroVariaveis+1; i++)
     newtonRaphsonAnterior[i] = Yn[i][numeroVariaveis+1]; /*pega a ultima coluna de Yn: solucao do sistema*/
 }
 
 void ZerarNRAnterior ()
 {
+  unsigned i;
   for (i=0; i<=numeroVariaveis+1; i++)
     newtonRaphsonAnterior[i] = 0;
 }
 
 void CopiarEstampaInvariante()
 {
+  unsigned i;
   for (i=0; i<=numeroVariaveis; i++)
   {
     for (j=0; j<=numeroVariaveis+1; j++)
@@ -238,6 +242,7 @@ void CopiarEstampaInvariante()
 
 void ZerarSistema()
 {
+  unsigned i,j;
   for (i=0; i<=numeroVariaveis; i++)
   {
     for (j=0; j<=numeroVariaveis+1; j++)
@@ -247,6 +252,7 @@ void ZerarSistema()
 
 void MostrarSistema ()
 {
+  unsigned j,k;
   for (k=1; k<=numeroVariaveis; k++)
   {
   	for (j=1; j<=numeroVariaveis+1; j++)
@@ -260,6 +266,7 @@ void MostrarSistema ()
 
 void MostrarSolucaoAtual ()
 {
+  unsigned j;
   	for (j=1; j<=numeroVariaveis; j++)
   	 printf("%+4.3f ",Yn[j][numeroVariaveis+1]);
   	printf("\n");
@@ -608,7 +615,7 @@ void InicializacaoRandomica()
 
 	srand ((unsigned)time(NULL));
 
-	printf ("Inicializacao Randomica\n");
+	//printf ("Inicializacao Randomica\n");
 	for (i=1; i<=numeroVariaveis;i++)
 	{
 		if (erros[i] > MAX_ERRO_NR)
@@ -645,11 +652,6 @@ void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pon
   ZerarSistema();
   CopiarEstampaInvariante();
   MontarEstampasVariantes(tempo, passo_simulacao, pontoOperacao);
-
-  #ifdef  DEBUG
-    printf("Sistema remontado apos iteracao do NR\n");
-    MostrarSistema();
-  #endif
 
   for (contador = 0; contador < contadorElementosNaoLineares; contador++)
   {
@@ -708,6 +710,10 @@ void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pon
       Yn[elementoNaoLinear.a][numeroVariaveis+1]-=z;
       Yn[elementoNaoLinear.b][numeroVariaveis+1]+=z;
     } /*resistor linear por partes*/
+    #ifdef  DEBUG
+      printf("Sistema remontado apos iteracao do NR\n");
+      MostrarSistema();
+    #endif
   }/*for*/
 }/*MontarNewtonRaphson*/
 
@@ -735,6 +741,7 @@ unsigned TestarConvergenciaNR () /*teste de convergencia*/
 void ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned int pontoOperacao)
 {
   unsigned convergiu;
+  unsigned i,k;
 
   ZerarSistema();
   ZerarNRAnterior();
@@ -743,19 +750,20 @@ void ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned int p
 	for (i=1; i<=numeroVariaveis; i++)
 		YnAnterior[i][numeroVariaveis+1] = 0.1;
 
-  for (k=1; k < MAX_INICIALIZACOES; k++)
+  for (k=1; k <= MAX_INICIALIZACOES; k++)
   {
     if (k == 1)
       InicializacaoRandomica();
-    for (i=1; i < MAX_ITERACOES; i++)
+    for (i=1; i <= MAX_ITERACOES; i++)
     {
       /*Monta tudo que é linear e tudo que é não-linear com base no resultado anterior*/
       MontarNewtonRaphson(tempo, passo_simulacao, pontoOperacao);
       ResolverSistema();
       convergiu = TestarConvergenciaNR();
+      //printf("Convergencia: %u\n", convergiu);
       if (convergiu == 1)
       {
-        //printf("Convergiu!\n");
+        printf("Convergiu!\n");
         return;
       }
       ArmazenarNRAnterior();
@@ -1022,6 +1030,7 @@ void ResolverPontoOperacao (double passo_simulacao)
   }
   else /*se tiver elementos nao lineares, resolve com NR*/
   {
+    ResolverNewtonRaphson(0, passo_simulacao, 1);
     /*Newton-Raphson que depende da solucao anterior*/
   }
 } /*ResolverPontoOperacao*/
@@ -1077,7 +1086,6 @@ int main(void)
   /*Analise no tempo*/
   for (tempo_atual = passo_simulacao; tempo_atual < tempo_simulacao; tempo_atual += passo_simulacao) /*começa em 0 ou em 0 + passo?*/
   {
-    MontarEstampasVariantes(tempo_atual, passo_simulacao, 0);
 
     if (contadorElementosNaoLineares != 0)
     {
@@ -1092,6 +1100,7 @@ int main(void)
     }
     else
     {
+      MontarEstampasVariantes(tempo_atual, passo_simulacao, 0);
       /* Resolve o sistema */
       if (ResolverSistema())
       {
