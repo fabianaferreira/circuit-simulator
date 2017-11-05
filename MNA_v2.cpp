@@ -83,6 +83,14 @@ typedef struct chave
          vLim;
 } chave;
 
+typedef struct resistor
+{
+  double v1, j1,
+         v2, j2,
+         v3, j3,
+         v4, j4;
+} resistor;
+
 /*Elemento possui atributos de fontes, pois há tipos diferentes, com parametros diferentes*/
 typedef struct elemento /* Elemento do netlist */
 {
@@ -94,6 +102,7 @@ typedef struct elemento /* Elemento do netlist */
   dc fonte_dc;
   pulse fonte_pulso;
   chave chaveResistiva;
+  resistor resistorPartes;
   double numeroEspiras;
   double jt0, vt0;
 } elemento;
@@ -366,7 +375,7 @@ void LerNetlist (FILE *arquivo)
     /*TRANSFORMADOR IDEAL*/
     else if(tipo=='K')
     {
-      printf("Entrei no if do transformador\n");
+      //printf("Entrei no if do transformador\n");
       sscanf(p,"%10s%10s%10s%10s%lg",na,nb,nc,nd,&netlist[numeroElementos].numeroEspiras);
       printf("%s %s %s %s %s %lg\n",netlist[numeroElementos].nome,na,nb,nc,nd, netlist[numeroElementos].numeroEspiras);
       netlist[numeroElementos].a=NumerarNo(na);
@@ -377,11 +386,14 @@ void LerNetlist (FILE *arquivo)
     /* RESISTOR LINEAR POR PARTES */
     else if(tipo=='N')
     {
-      elementosVariantes[contadorElementosVariantes] = numeroElementos;
-      contadorElementosVariantes++;
+      sscanf(p,"%10s%10s%lg%lg%lg%lg%lg%lg%lg%lg",na,nb,&netlist[numeroElementos].resistorPartes.v1, &netlist[numeroElementos].resistorPartes.j1,
+                                                        &netlist[numeroElementos].resistorPartes.v2, &netlist[numeroElementos].resistorPartes.j2,
+                                                        &netlist[numeroElementos].resistorPartes.v3, &netlist[numeroElementos].resistorPartes.j3,
+                                                        &netlist[numeroElementos].resistorPartes.v4, &netlist[numeroElementos].resistorPartes.j4);
+      netlist[numeroElementos].a=NumerarNo(na);
+      netlist[numeroElementos].b=NumerarNo(nb);
       elementosNaoLineares[contadorElementosNaoLineares] = numeroElementos;
       contadorElementosNaoLineares ++;
-
     }
     /* CHAVE */
     else if(tipo=='$')
@@ -628,7 +640,7 @@ void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pon
 {
   unsigned contador;
   elemento elementoNaoLinear;
-  double tensaoAtual;
+  double tensaoAtual, g, z;
   /*gera a estampa novamente para ser alterada pelos elementos não-lineares*/
   ZerarSistema();
   CopiarEstampaInvariante();
@@ -665,6 +677,37 @@ void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pon
         Yn[elementoNaoLinear.b][elementoNaoLinear.a]-=elementoNaoLinear.chaveResistiva.gon;
       }
     }
+    else if (elementoNaoLinear.nome[0] == 'N')
+    {
+      if (elementoNaoLinear.a == 0)
+        newtonRaphsonAnterior[elementoNaoLinear.a] = 0;
+      else if (elementoNaoLinear.b == 0)
+        newtonRaphsonAnterior[elementoNaoLinear.b] = 0;
+
+      tensaoAtual = newtonRaphsonAnterior[elementoNaoLinear.a] - newtonRaphsonAnterior[elementoNaoLinear.b];
+
+      if (tensaoAtual < elementoNaoLinear.resistorPartes.v2)
+      {
+        g = (elementoNaoLinear.resistorPartes.j2 - elementoNaoLinear.resistorPartes.j1)/(elementoNaoLinear.resistorPartes.v2 - elementoNaoLinear.resistorPartes.v1);
+        z = (elementoNaoLinear.resistorPartes.j2 - g*elementoNaoLinear.resistorPartes.v2);
+      }
+      else if (tensaoAtual < elementoNaoLinear.resistorPartes.v3)
+      {
+        g = (elementoNaoLinear.resistorPartes.j3 - elementoNaoLinear.resistorPartes.j2)/(elementoNaoLinear.resistorPartes.v3 - elementoNaoLinear.resistorPartes.v2);
+        z = (elementoNaoLinear.resistorPartes.j3 - g*elementoNaoLinear.resistorPartes.v3);
+      }
+      else
+      {
+        g = (elementoNaoLinear.resistorPartes.j4 - elementoNaoLinear.resistorPartes.j3)/(elementoNaoLinear.resistorPartes.v4 - elementoNaoLinear.resistorPartes.v3);
+        z = (elementoNaoLinear.resistorPartes.j4 - g*elementoNaoLinear.resistorPartes.v4);
+      }
+      Yn[elementoNaoLinear.a][elementoNaoLinear.a]+=g;
+      Yn[elementoNaoLinear.b][elementoNaoLinear.b]+=g;
+      Yn[elementoNaoLinear.a][elementoNaoLinear.b]-=g;
+      Yn[elementoNaoLinear.b][elementoNaoLinear.a]-=g;
+      Yn[elementoNaoLinear.a][numeroVariaveis+1]-=z;
+      Yn[elementoNaoLinear.b][numeroVariaveis+1]+=z;
+    } /*resistor linear por partes*/
   }/*for*/
 }/*MontarNewtonRaphson*/
 
