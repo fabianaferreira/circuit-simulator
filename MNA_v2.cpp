@@ -42,8 +42,8 @@ Os nos podem ser nomes
 #define PO_INDUTOR          1e-9
 #define MAX_ERRO_NR         1e-9
 #define X_ERRO              1
-#define MAX_ITERACOES       10
-#define MAX_INICIALIZACOES  5
+#define MAX_ITERACOES       50
+#define MAX_INICIALIZACOES  20
 //#define DEBUG
 #define PI acos(-1.0)
 #define NOME_ARQUIVO_SAIDA "saida_simulacao.tab"
@@ -754,7 +754,10 @@ void ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned int p
       ResolverSistema();
       convergiu = TestarConvergenciaNR();
       if (convergiu == 1)
+      {
+        //printf("Convergiu!\n");
         return;
+      }
       ArmazenarNRAnterior();
     }
   }
