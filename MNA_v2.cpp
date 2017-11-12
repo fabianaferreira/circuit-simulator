@@ -47,7 +47,7 @@ Os nos podem ser nomes
 #define MAX_ITERACOES       50
 #define MAX_INICIALIZACOES  10
 #define GMIN_INICIAL        exp(15)
-#define GMIN_MINIMA         exp(-15)
+#define GMIN_MINIMA         exp(-8)
 #define NOME_ARQUIVO_SAIDA "saida_simulacao.tab"
 
 //#define DEBUG
@@ -149,7 +149,6 @@ FILE *arquivo;
 double
   g,
   Yn[MAX_NOS+1][MAX_NOS+2],
-  YnAnterior[MAX_NOS+1][MAX_NOS+2],
   YnNewtonRaphson[MAX_NOS+1][MAX_NOS+2],
   YnInvariantes[MAX_NOS+1][MAX_NOS+2],
   solucaoAnterior[MAX_NOS+2],
@@ -669,10 +668,10 @@ void InicializacaoRandomica()
 				valor /= 1000.0;
 				printf ("i = %f\n", valor);
 			}
-			YnAnterior[i][numeroVariaveis+1] = valor;
+			solucaoAnterior[i] = valor;
 		}
 		else
-			YnAnterior[i][numeroVariaveis+1] = Yn[i][numeroVariaveis+1];
+			solucaoAnterior[i] = Yn[i][numeroVariaveis+1];
 	}
 	printf ("\n");
 }
@@ -891,15 +890,9 @@ void ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned int p
   {
     //Inicializacao das variaveis do sistema
   	for (i=1; i<=numeroVariaveis; i++)
-  		YnAnterior[i][numeroVariaveis+1] = 0.1;
-  }
-  else if (pontoOperacao == 0)
-  {
-  	for (i=1; i<=numeroVariaveis; i++)
-  		YnAnterior[i][numeroVariaveis+1] = solucaoAnterior[i];
+  		newtonRaphsonAnterior[i] = 0.1;
   }
 
-  //ArmazenarNRAnterior();
 
   for (k=1; k <= MAX_INICIALIZACOES; k++)
   {
@@ -925,11 +918,11 @@ void ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned int p
     }
     printf("Por enquanto deu merda\n");
   }
-  // //return; /*provisorio para não testar gmin*/
+  // // //return; /*provisorio para não testar gmin*/
 
   i = 1;
   gminAtual = GMIN_INICIAL;
-  ZerarNRAnterior();
+  //ZerarNRAnterior();
 
   while (i < MAX_ITERACOES)
   {
@@ -972,7 +965,6 @@ void ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned int p
       {
         printf("Nao converge nem com Gmin Stepping\n");
         //ArmazenarNRAnterior();  /*Nao sei se tenho que armazenar o anterior ou não, acho que sim*/
-
         return;
       }
       fator = pow(2,(pow(0.5, double(contadorFator))));
