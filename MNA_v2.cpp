@@ -38,15 +38,20 @@ Os nos podem ser nomes
 #define MAX_ELEM            50
 #define MAX_NOS             50
 #define TOLG                1e-9
+#define PI acos(-1.0)
 #define PO_CAPACITOR        1e9
 #define PO_INDUTOR          1e-9
 #define MAX_ERRO_NR         1e-9
+#define MAX_ERRO_GMIN       1e-5
 #define X_ERRO              1
-#define MAX_ITERACOES       10
-#define MAX_INICIALIZACOES  50
-//#define DEBUG
-#define PI acos(-1.0)
+#define MAX_ITERACOES       50
+#define MAX_INICIALIZACOES  10
+#define GMIN_INICIAL        exp(15)
+#define GMIN_MINIMA         exp(-15)
 #define NOME_ARQUIVO_SAIDA "saida_simulacao.tab"
+
+//#define DEBUG
+//#define DEBUG_GMIN
 
 typedef struct sine /* STRUCT SIN */
 {
@@ -111,7 +116,9 @@ typedef struct elemento /* Elemento do netlist */
   Como o passo a ser escrito no arquivo de saida pode nao ser o mesmo do passo da
   integracao, vamos definir os dois separadamente*/
 double tempo_simulacao, passo_simulacao, passo_saida;
-double tempo_atual;
+//double tempo_atual;
+double gminAtual = GMIN_INICIAL;
+double fator = 10;
 
 elemento netlist[MAX_ELEM]; /* Netlist */
 int elementosVariantes[MAX_ELEM];
@@ -143,6 +150,7 @@ double
   g,
   Yn[MAX_NOS+1][MAX_NOS+2],
   YnAnterior[MAX_NOS+1][MAX_NOS+2],
+  YnNewtonRaphson[MAX_NOS+1][MAX_NOS+2],
   YnInvariantes[MAX_NOS+1][MAX_NOS+2],
   solucaoAnterior[MAX_NOS+2],
   newtonRaphsonAnterior[MAX_NOS+2],
@@ -230,9 +238,29 @@ void ZerarNRAnterior ()
     newtonRaphsonAnterior[i] = 0;
 }
 
+void ArmazenarEstampasNewtonRaphson() /*vai armazenar a estampa do NR para adicionar o Gmin*/
+{
+  unsigned i,j;
+  for (i=0; i<=numeroVariaveis; i++)
+  {
+    for (j=0; j<numeroVariaveis+1; j++)
+      YnNewtonRaphson[i][j] = Yn[i][j];
+  }
+}
+
+void CopiarEstampasNewtonRaphson ()
+{
+  unsigned i,j;
+  for (i=0; i<=numeroVariaveis; i++)
+  {
+    for (j=0; j<numeroVariaveis+1; j++)
+      Yn[i][j] = YnNewtonRaphson[i][j];
+  }
+}
+
 void CopiarEstampaInvariante()
 {
-  unsigned i;
+  unsigned i,j;
   for (i=0; i<=numeroVariaveis; i++)
   {
     for (j=0; j<=numeroVariaveis+1; j++)
@@ -493,6 +521,7 @@ void MontarEstampasVariantes (double tempo, double passo_simulacao, unsigned pon
         else
           elementoVariante.valor = nivel_dc +
                                    amplitude*(exp(-amortecimento*(tempo - atraso)))*(sin(2*PI*freq*(tempo - atraso) + (PI*defasagem)/180));
+        //printf("Valor fonte seno: %lg em t = %lg\n", elementoVariante.valor, tempo);
       }
       /*Tá dando merda, tem que tudo, inclusive os extremos*/
       else if (strcmp(elementoVariante.tipo_fonte, "PULSE") == 0)
@@ -514,23 +543,27 @@ void MontarEstampasVariantes (double tempo, double passo_simulacao, unsigned pon
           tempo_descida = passo_simulacao;
 
         double tempoReal = tempo - atraso;
+        //printf("Tempo atual: %lg\n", tempo);
         tempoReal = fmod(tempoReal, periodo);
         double tempoDesligada = periodo - (tempo_subida + tempo_descida + tempo_ligada);
 
-        if (tempo < atraso)
+        if (tempo <= atraso)
           elementoVariante.valor = amplitude1;
 
-        else if (tempo > (atraso + ciclos*periodo))
+        else if (tempo >= (atraso + ciclos*periodo))
           elementoVariante.valor = amplitude1;
 
         else
         {
-          if (tempoReal < tempo_subida)
+          if (tempoReal <= tempo_subida)
             elementoVariante.valor = ((amplitude2 - amplitude1)/tempo_subida)*tempoReal + amplitude1;
-          else if (tempoReal < tempo_subida + tempo_ligada)
+
+          else if (tempoReal <= tempo_subida + tempo_ligada + passo_simulacao)
             elementoVariante.valor = amplitude2;
-          else if (tempoReal < tempo_subida + tempo_ligada + tempo_descida)
+
+          else if (tempoReal <= tempo_subida + tempo_ligada + tempo_descida)
             elementoVariante.valor = ((amplitude2 - amplitude1)/tempo_descida)*(tempoReal - (tempo_subida + tempo_ligada));
+
           else
             elementoVariante.valor = amplitude1;
         }
@@ -612,6 +645,7 @@ void MontarEstampasVariantes (double tempo, double passo_simulacao, unsigned pon
 void InicializacaoRandomica()
 {
 	double valor;
+  unsigned i;
 
 	srand ((unsigned)time(NULL));
 
@@ -719,7 +753,7 @@ void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pon
 
 unsigned TestarConvergenciaNR () /*teste de convergencia*/
 {
-  int i;
+  unsigned i;
 
 	for (i=1; i<=numeroVariaveis;i++)
 	{
@@ -738,38 +772,221 @@ unsigned TestarConvergenciaNR () /*teste de convergencia*/
 	return 1;
 }
 
+unsigned TestarConvergenciaGMin () /*teste de convergencia*/
+{
+  unsigned i;
+
+	for (i=1; i<=numeroVariaveis;i++)
+	{
+		if (fabs(Yn[i][numeroVariaveis+1]) > X_ERRO)
+		{
+			erros[i] = X_ERRO*fabs((Yn[i][numeroVariaveis+1]-newtonRaphsonAnterior[i])/Yn[i][numeroVariaveis+1]);
+		}
+		else
+		{
+			erros[i] = fabs(Yn[i][numeroVariaveis+1]-newtonRaphsonAnterior[i]);
+		}
+
+		if (erros[i] > MAX_ERRO_GMIN)
+			return 0;
+	}
+	return 1;
+}
+
+void MontarEstampasGMin() /*acho que faz sentido, tem que testar*/
+{
+  //printf("Condutancia atual: %lg\n", condutanciaAtual);
+  double condutancia = gminAtual;
+  unsigned i, k, l, contador, no1, no2, no1Atual, no2Atual;
+  double erroAtual, tensao1, tensao2;
+  double fonteGMin = 0;
+  unsigned vetorErros[MAX_NOS + 1];
+  char tipo;
+  contador = 0;
+  for (i=1; i <= numeroVariaveis; i++) /*achando os nos que tem tensoes nodais com erro maior do que o permitido*/
+  {
+    erroAtual = erros[i];
+    if (erroAtual >= MAX_ERRO_NR)
+    {
+      printf("Erro atual no MontarEstampas: %lg\n", erroAtual);
+      vetorErros[contador] = i;
+      contador += 1;
+    }
+  }
+  for (i=0; i < contadorElementosNaoLineares; i++)
+  {
+    no1 = netlist[elementosNaoLineares[i]].a;
+    no2 = netlist[elementosNaoLineares[i]].b;
+    tipo = netlist[elementosNaoLineares[i]].nome[0];
+
+    if (tipo == 'N') /* se resistor linear por partes coloca uma fonte de tensao em serie com a condutancia*/
+    {
+      tensao1 = netlist[elementosNaoLineares[i]].resistorPartes.v2;
+      tensao2 = netlist[elementosNaoLineares[i]].resistorPartes.v3;
+      fonteGMin = (tensao1 + tensao2)/2;
+      printf("Fonte Gmin: %lg\n", fonteGMin);
+    }
+
+    if (no1 == 0 || no2 == 0)
+    {
+      //printf("Entrei no if de um dos nos ser terra\n");
+      for (k=0; k < contador; k++)
+      {
+        if (no1 == vetorErros[k])
+        {
+          Yn[no1][no1] += condutancia;
+          Yn[no1][numeroVariaveis + 1] -= fonteGMin*condutancia;
+          break;
+        }
+
+        else if (no2 == vetorErros[k])
+        {
+          Yn[no2][no2] += condutancia;
+          Yn[no2][numeroVariaveis + 1] -= fonteGMin*condutancia;
+          break;
+        }
+      }
+    }
+    else
+    {
+      for (k=0; k < contador; k++)
+      {
+        no1Atual = vetorErros[k];
+        for (l=k+1; l < contador; l++)
+        {
+          no2Atual = vetorErros[l];
+          if (no1Atual == no1 && no2Atual == no2)
+          {
+            /*Monta estampa*/
+            Yn[no1Atual][no1Atual] += condutancia;
+            Yn[no2Atual][no2Atual] += condutancia;
+            Yn[no1Atual][no2Atual] -= condutancia;
+            Yn[no2Atual][no1Atual] -= condutancia;
+            Yn[no1Atual][numeroVariaveis + 1] -= fonteGMin*condutancia;
+            Yn[no2Atual][numeroVariaveis + 1] += fonteGMin*condutancia;
+          }
+        } /*for vetorErros de dentro*/
+      } /*for vetorErros de fora*/
+    } /*se nenhum dos dois nos for terra*/
+  } /*For elementos não lineares*/
+  #ifdef  DEBUG_GMIN
+    printf("Sistema remontado apos iteracao do GMin\n");
+    MostrarSistema();
+  #endif
+} /*MontarEstampasGMin*/
+
 void ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned int pontoOperacao)
 {
   unsigned convergiu;
-  unsigned i,k;
+  unsigned i,k,j, contadorFator;
 
+  fator = 100;
+  contadorFator = 1;
   ZerarSistema();
   ZerarNRAnterior();
+  //ArmazenarEstampasNewtonRaphson(); /*vai copiar a matriz para ter a condutância colocada*/
 
   //Inicializacao das variaveis do sistema
-	for (i=1; i<=numeroVariaveis; i++)
-		YnAnterior[i][numeroVariaveis+1] = 0.1;
+  if (pontoOperacao == 1)
+  {
+    //Inicializacao das variaveis do sistema
+  	for (i=1; i<=numeroVariaveis; i++)
+  		YnAnterior[i][numeroVariaveis+1] = 0.1;
+  }
+  else if (pontoOperacao == 0)
+  {
+  	for (i=1; i<=numeroVariaveis; i++)
+  		YnAnterior[i][numeroVariaveis+1] = solucaoAnterior[i];
+  }
+
+  //ArmazenarNRAnterior();
 
   for (k=1; k <= MAX_INICIALIZACOES; k++)
   {
-    if (k == 1)
+    if (k != 1)
       InicializacaoRandomica();
     for (i=1; i <= MAX_ITERACOES; i++)
     {
       /*Monta tudo que é linear e tudo que é não-linear com base no resultado anterior*/
       MontarNewtonRaphson(tempo, passo_simulacao, pontoOperacao);
-      ResolverSistema();
+      if (ResolverSistema())
+      {
+        getch();
+        exit(0);
+      }
       convergiu = TestarConvergenciaNR();
-      //printf("Convergencia: %u\n", convergiu);
       if (convergiu == 1)
       {
         printf("Convergiu!\n");
+        ArmazenarResultadoAnterior();
         return;
       }
       ArmazenarNRAnterior();
     }
+    printf("Por enquanto deu merda\n");
   }
-  printf("Nao converge de jeito nenhum\n");
+  // //return; /*provisorio para não testar gmin*/
+
+  i = 1;
+  gminAtual = GMIN_INICIAL;
+  ZerarNRAnterior();
+
+  while (i < MAX_ITERACOES)
+  {
+    /*Monta tudo que é linear e tudo que é não-linear com base no resultado anterior*/
+
+    //printf("Apos montar:\n");
+    MontarNewtonRaphson(tempo, passo_simulacao, pontoOperacao);
+    // MostrarSistema();
+    // getch();
+
+    //printf("Apos gmin estampas:\n");
+    MontarEstampasGMin();
+    // MostrarSistema();
+    // getch();
+
+    if (ResolverSistema())
+    {
+      getch();
+      exit(0);
+    }
+    convergiu = TestarConvergenciaGMin();
+
+    if (convergiu == 1)
+    {
+      printf("Entrei no convergiu\n");
+      printf("Gmin atual: %lg\n",gminAtual);
+      if (gminAtual < GMIN_MINIMA)
+      {
+        printf("Convergiu GMin!\n");
+        ArmazenarResultadoAnterior();
+        fator = 100;
+        return;
+      }
+      fator = 100;
+      i = 1;
+    }
+    else /*se não converge, divide gmin por fatores (10^(1/2))*/
+    {
+      if (fator < 1.00000001)
+      {
+        printf("Nao converge nem com Gmin Stepping\n");
+        //ArmazenarNRAnterior();  /*Nao sei se tenho que armazenar o anterior ou não, acho que sim*/
+
+        return;
+      }
+      fator = pow(2,(pow(0.5, double(contadorFator))));
+      contadorFator++;
+    }
+    i++;
+    gminAtual /= fator;
+    ArmazenarNRAnterior();
+
+    #ifdef  DEBUG_GMIN
+      printf("Sistema remontado apos copiar GMin\n");
+      MostrarSistema();
+    #endif
+  }/*Gmin stepping*/
 }/*ResolverNewtonRaphson*/
 
 void CalcularMemorias (unsigned pontoOperacao, double passo_simulacao)
@@ -801,8 +1018,6 @@ void CalcularMemorias (unsigned pontoOperacao, double passo_simulacao)
         resistencia = passo_simulacao/(2*elementoCL->valor);
         correnteAtual = tensaoAtual/(resistencia) - (1/resistencia)*(elementoCL->vt0) - elementoCL->jt0;
       }
-      //printf("Corrente capacitor: %lg\n", netlist[elementos[contador]].jt0);
-      //printf("Tensao capacitor: %lg\n", elementoCL.vt0);
     }/*capacitor*/
 
     else if (elementoCL->nome[0] == 'L') /*ainda pode dar merda*/
@@ -1049,6 +1264,7 @@ int main(void)
   /* Leitura do netlist */
   numeroElementos=0;
   numeroVariaveis=0;
+  double tempo_atual = 0.0;
   strcpy(lista[0],"0");
   printf("Nome do arquivo com o netlist (ex: mna.net): ");
   scanf("%50s",nomeArquivo);
@@ -1078,13 +1294,11 @@ int main(void)
   if (temCapacitorOuIndutor == 1)
   {
     ResolverPontoOperacao(passo_simulacao);
-    // for (i=1; i<=numeroVariaveis; i++)
-  	// 	YnAnterior[i][numeroVariaveis+1] = 0;
     MostrarSolucaoAtual();
   }
 
   /*Analise no tempo*/
-  for (tempo_atual = passo_simulacao; tempo_atual < tempo_simulacao; tempo_atual += passo_simulacao) /*começa em 0 ou em 0 + passo?*/
+  for (tempo_atual = passo_simulacao; tempo_atual <= tempo_simulacao; tempo_atual += passo_simulacao) /*começa em 0 ou em 0 + passo?*/
   {
 
     if (contadorElementosNaoLineares != 0)
@@ -1121,6 +1335,7 @@ int main(void)
       fprintf(arquivoSaida," %lg", Yn[i][numeroVariaveis+1]);
     }
     fprintf(arquivoSaida,"\n");
+
   }/*for analise no tempo*/
 
   /*Fecha arquivo*/
