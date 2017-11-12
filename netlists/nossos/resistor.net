@@ -1,0 +1,4 @@
+Fonte Senoidal com Resistor em Serie
+R0102 1 0 1
+V0200 1 0 SIN 1 1 2 0 0 0 100
+.TRAN 15 0.01 TRAP 1

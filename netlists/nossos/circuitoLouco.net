@@ -1,0 +1,15 @@
+Circuito Louco para testar Capacitor e Indutor no tempo
+R3 1 2 1
+C3 1 0 2
+R1 2 3 1
+C2 2 0 1
+L1 2 3 2
+L3 2 0 5E-1
+R2 2 4 1
+C1 4 3 3
+L2 3 5 1
+C4 5 6 3
+R4 6 0 1
+V1 4 0 SIN 0 10 1 0 0 0 1000
+E1 3 2 2 0 2
+.TRAN 10 1E-5 TRAP 1

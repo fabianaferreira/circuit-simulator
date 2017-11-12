@@ -1,0 +1,16 @@
+Circuito dobrador de tensao usando chaves como diodos:
+C0 1 2 1E-6
+$0 2 0 0 2 1E9 1E-9 0
+$1 2 3 2 3 1E9 1E-9 0
+C1 3 0 1E-6
+RL 3 0 1E3
+V0200 1 0 SIN 0 1 1000 0 0 0 100
+.TRAN 0.01 1E-6 TRAP 1
+*      1            2         3
+*     |------| |-------$$$$----
+*     |             |         |
+*     V             $        ---
+*    SIN            $        ---
+*     |             |         |
+*    GND           GND       GND
+*     0             0         0

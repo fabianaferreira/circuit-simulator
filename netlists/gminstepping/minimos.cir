@@ -1,0 +1,14 @@
+N0100 19535 19279 -2 0 -1 1 1 -1 2 0
+N0200 19538 19282 -2 0 -1 1 1 -1 2 0
+I0001 19278 19534 SIN 0 2 1 0 0 0 1000
+I0002 19281 19537 SIN 0 2 1.7 0 0 0 1000
+= 19022 19278
+= 19023 19279
+= 19025 19281
+= 19026 19282
+- 19535 19534
+- 19538 19537
+* 20044 19788 Solução correta se gmin não é ligada a nós que convergem
+* 20300 20044 Possível perda de memória ao se ajudar a convergência
+* 20556 20300 Circuito gerador de mínimos locais em lugares diferentes
+. 18764 18508 TRAN 3 3E-3 TRAP 1

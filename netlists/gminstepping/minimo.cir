@@ -1,0 +1,7 @@
+N0100 19534 19278 -2 0 -1 1 1 -1 2 0
+I0001 19277 19533 SIN 0 2 1 0 0 0 1000
+= 19021 19277
+= 19022 19278
+- 19534 19533
+* 20556 20300 Circuito gerador de mínimos locais causando problemas de convergência
+. 18764 18508 TRAN 3 3E-3 TRAP 1

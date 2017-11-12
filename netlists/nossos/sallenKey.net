@@ -1,0 +1,9 @@
+Filtro Sallen-Key da internet
+R1 1 2 1E4
+R2 2 3 1E4
+C1 2 4 1E-9
+C2 3 0 1E-9
+OP1 4 0 3 4
+V0200 1 0 SIN 0 10 15900 0 0 0 100
+.TRAN 6E-3 6E-7 TRAP 1
+

@@ -1,0 +1,6 @@
+﻿Circuito com Resistores Nao Lineares
+NLOUCO 1 0 -1 0 1 -1 -1 1 0 -1
+NVPORI 1 0 -1 -1 0 1 0 -1 1 1
+NIPORV 1 0 -1 -1 1 0 -1 0 1 1
+V0200 1 0 SIN 0 2 2 0 0 0 100
+.TRAN 1 0.001 TRAP 1

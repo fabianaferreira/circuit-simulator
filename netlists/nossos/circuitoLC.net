@@ -1,0 +1,11 @@
+Circuito de Tanque LC para teste de Oscilacao
+L1 1 0 1E-3
+C1 1 0 1E-3
+V1 1 0 PULSE 1 0 6.2E-3 E-4 E-4 6.2E-4 6.2E-3 1
+.TRAN 6.2E-2 6.2E-7 TRAP 1 
+*      ___________
+*     |      |    |
+*     I     ---   L
+*     |     ---   L
+*     |      |    |
+*    GND    GND  GND

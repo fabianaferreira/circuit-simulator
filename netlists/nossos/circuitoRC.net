@@ -1,0 +1,5 @@
+Circuito RC com fonte DC
+R0102 1 2 1
+C0010 2 0 1
+V0200 1 0 DC 1
+.TRAN 15 0.001 TRAP 1
