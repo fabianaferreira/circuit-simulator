@@ -41,7 +41,7 @@ Os nos podem ser nomes
 #define PI acos(-1.0)
 #define PO_CAPACITOR        1e9
 #define PO_INDUTOR          1e-9
-#define MAX_ERRO_NR         1e-7
+#define MAX_ERRO_NR         1e-5
 //#define MAX_ERRO_GMIN       1e-5
 #define X_ERRO              1
 #define MAX_ITERACOES       50
@@ -653,20 +653,20 @@ void InicializacaoRandomica()
 	{
 		if (erros[i] > MAX_ERRO_NR)
 		{
-			printf ("Erro maior\n");
+			// printf ("Erro maior\n");
 			if (i <= numeroNos)
 			{
 				valor = rand() % 20001;
 				valor -= 10000;
 				valor /= 1000.0;
-				printf ("i = %f\n", valor);
+				// printf ("i = %f\n", valor);
 			}
 			else
 			{
 				valor = rand() % 2001;
 				valor -= 1000;
 				valor /= 1000.0;
-				printf ("i = %f\n", valor);
+				// printf ("i = %f\n", valor);
 			}
 			newtonRaphsonAnterior[i] = valor;
 		}
@@ -807,7 +807,7 @@ void MontarEstampasGMin() /*acho que faz sentido, tem que testar*/
     erroAtual = erros[i];
     if (erroAtual >= MAX_ERRO_NR)
     {
-      printf("Erro atual no MontarEstampas: %lg\n", erroAtual);
+      // printf("Erro atual no MontarEstampas: %lg\n", erroAtual);
       vetorErros[contador] = i;
       contador += 1;
     }
@@ -823,7 +823,7 @@ void MontarEstampasGMin() /*acho que faz sentido, tem que testar*/
       tensao1 = netlist[elementosNaoLineares[i]].resistorPartes.v2;
       tensao2 = netlist[elementosNaoLineares[i]].resistorPartes.v3;
       fonteGMin = (tensao1 + tensao2)/2;
-      printf("Fonte Gmin: %lg\n", fonteGMin);
+      // printf("Fonte Gmin: %lg\n", fonteGMin);
     }
 
     if (no1 == 0 || no2 == 0)
@@ -834,14 +834,14 @@ void MontarEstampasGMin() /*acho que faz sentido, tem que testar*/
         if (no1 == vetorErros[k])
         {
           Yn[no1][no1] += condutancia;
-          Yn[no1][numeroVariaveis + 1] -= fonteGMin*condutancia;
+          Yn[no1][numeroVariaveis + 1] += fonteGMin*condutancia;
           break;
         }
 
         else if (no2 == vetorErros[k])
         {
           Yn[no2][no2] += condutancia;
-          Yn[no2][numeroVariaveis + 1] += fonteGMin*condutancia;
+          Yn[no2][numeroVariaveis + 1] -= fonteGMin*condutancia;
           break;
         }
       }
@@ -863,8 +863,8 @@ void MontarEstampasGMin() /*acho que faz sentido, tem que testar*/
               Yn[no2Atual][no2Atual] += condutancia;
               Yn[no1Atual][no2Atual] -= condutancia;
               Yn[no2Atual][no1Atual] -= condutancia;
-              Yn[no1Atual][numeroVariaveis + 1] -= fonteGMin*condutancia;
-              Yn[no2Atual][numeroVariaveis + 1] += fonteGMin*condutancia;
+              Yn[no1Atual][numeroVariaveis + 1] += fonteGMin*condutancia;
+              Yn[no2Atual][numeroVariaveis + 1] -= fonteGMin*condutancia;
             }
             else
             {
@@ -905,6 +905,11 @@ void ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned int p
   	for (i=1; i<=numeroVariaveis; i++)
   		newtonRaphsonAnterior[i] = 0.1;
   }
+  else
+  {
+    for (i=1; i<=numeroVariaveis; i++)
+      newtonRaphsonAnterior[i] = solucaoAnterior[i];
+  }
 
 
   for (k=1; k <= MAX_INICIALIZACOES; k++)
@@ -923,77 +928,86 @@ void ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned int p
       convergiu = TestarConvergenciaNR();
       if (convergiu == 1)
       {
-        printf("Convergiu!\n");
-        ArmazenarResultadoAnterior();
+        // printf("Convergiu!\n");
+        //ArmazenarResultadoAnterior();
         return;
       }
       ArmazenarNRAnterior();
     }
-    printf("Por enquanto deu merda\n");
+    // printf("Por enquanto deu merda\n");
   }
-  // // //return; /*provisorio para não testar gmin*/
+  //return; /*provisorio para não testar gmin*/
+
+  if (pontoOperacao == 1)
+  {
+    //Inicializacao das variaveis do sistema
+  	for (i=1; i<=numeroVariaveis; i++)
+  		newtonRaphsonAnterior[i] = 0.1;
+  }
+  else
+  {
+    for (i=1; i<=numeroVariaveis; i++)
+      newtonRaphsonAnterior[i] = solucaoAnterior[i];
+  }
 
   i = 1;
   gminAtual = GMIN_INICIAL;
-  //ZerarNRAnterior();
-  for (k=1; k <= MAX_INICIALIZACOES; k++)
+
+  while (i < MAX_ITERACOES)
   {
-    InicializacaoRandomica();
-    while (i < MAX_ITERACOES)
+    /*Monta tudo que é linear e tudo que é não-linear com base no resultado anterior*/
+    //printf("Apos montar:\n");
+    MontarNewtonRaphson(tempo, passo_simulacao, pontoOperacao);
+    // MostrarSistema();
+    // getch();
+
+    //printf("Apos gmin estampas:\n");
+    MontarEstampasGMin();
+    // MostrarSistema();
+    // getch();
+
+    if (ResolverSistema())
     {
-      /*Monta tudo que é linear e tudo que é não-linear com base no resultado anterior*/
-      //printf("Apos montar:\n");
-      MontarNewtonRaphson(tempo, passo_simulacao, pontoOperacao);
-      // MostrarSistema();
-      // getch();
+      getch();
+      exit(0);
+    }
+    convergiu = TestarConvergenciaGMin();
 
-      //printf("Apos gmin estampas:\n");
-      MontarEstampasGMin();
-      // MostrarSistema();
-      // getch();
-
-      if (ResolverSistema())
+    if (convergiu == 1)
+    {
+      printf("Entrei no convergiu no tempo %lg\n", tempo);
+      // printf("Gmin atual: %lg\n",gminAtual);
+      if (gminAtual < GMIN_MINIMA)
       {
-        getch();
-        exit(0);
-      }
-      convergiu = TestarConvergenciaGMin();
-
-      if (convergiu == 1)
-      {
-        printf("Entrei no convergiu\n");
-        printf("Gmin atual: %lg\n",gminAtual);
-        if (gminAtual < GMIN_MINIMA)
-        {
-          printf("Convergiu GMin!\n");
-          ArmazenarResultadoAnterior();
-          fator = 100;
-          return;
-        }
+        printf("Convergiu GMin!\n");
+        ArmazenarResultadoAnterior();
         fator = 100;
-        i = 1;
+        return;
       }
-      else /*se não converge, divide gmin por fatores (10^(1/2))*/
+      fator = 100;
+      i = 1;
+    }
+    else /*se não converge, divide gmin por fatores (10^(1/2))*/
+    {
+      printf("Nao convergiu no tempo %lg\n", tempo);
+      if (fator < 1.00000001)
       {
-        if (fator < 1.00000001)
-        {
-          printf("Nao converge nem com Gmin Stepping\n");
-          //ArmazenarNRAnterior();  /*Nao sei se tenho que armazenar o anterior ou não, acho que sim*/
-          return;
-        }
-        fator = pow(2,(pow(0.5, double(contadorFator))));
-        contadorFator++;
+        printf("Nao converge nem com Gmin Stepping\n");
+        //ArmazenarNRAnterior();  /*Nao sei se tenho que armazenar o anterior ou não, acho que sim*/
+        //return;
       }
-      i++;
-      gminAtual /= fator;
-      ArmazenarNRAnterior();
+      fator = pow(2,(pow(0.5, double(contadorFator))));
+      contadorFator++;
+    }
+    i++;
+    gminAtual /= fator;
+    ArmazenarNRAnterior();
 
-      #ifdef  DEBUG_GMIN
-        printf("Sistema remontado apos copiar GMin\n");
-        MostrarSistema();
-      #endif
-    }/*Gmin stepping*/
-  }/*Gmin stepping inicializacoes*/
+    #ifdef  DEBUG_GMIN
+      printf("Sistema remontado apos copiar GMin\n");
+      MostrarSistema();
+    #endif
+  }/*Gmin stepping*/
 }/*ResolverNewtonRaphson*/
 
 void CalcularMemorias (unsigned pontoOperacao, double passo_simulacao)
@@ -1298,11 +1312,18 @@ int main(void)
   CopiarEstampaInvariante();
   printf("Sistema apos estampas invariantes:\n");
   MostrarSistema();
-  if (temCapacitorOuIndutor == 1)
+  if (temCapacitorOuIndutor == 1 && contadorElementosNaoLineares == 0)
   {
     ResolverPontoOperacao(passo_simulacao);
+    //ArmazenarNRAnterior();
     MostrarSolucaoAtual();
   }
+  else if (contadorElementosNaoLineares != 0)
+  {
+    ResolverNewtonRaphson(tempo_atual, passo_simulacao, 1);
+    ArmazenarResultadoAnterior();
+  }
+
 
   /*Analise no tempo*/
   for (tempo_atual = passo_simulacao; tempo_atual <= tempo_simulacao; tempo_atual += passo_simulacao) /*começa em 0 ou em 0 + passo?*/
@@ -1312,12 +1333,10 @@ int main(void)
     {
       /*Newton-Raphson com parametros do sistema inicial (ponto de operacao)*/
       ResolverNewtonRaphson(tempo_atual, passo_simulacao, 0);
+      ArmazenarResultadoAnterior();
       if (temCapacitorOuIndutor == 1) /*COMO FAZER ISSO DE UMA FORMA MAIS ESPERTA?*/
-      {
-        ArmazenarResultadoAnterior();
         CalcularMemorias(0, passo_simulacao);  /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
         //ZerarResultadoAnterior();
-      }
     }
     else
     {
