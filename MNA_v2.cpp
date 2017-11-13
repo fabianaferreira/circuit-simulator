@@ -115,7 +115,7 @@ typedef struct elemento /* Elemento do netlist */
 /*As seguintes variaveis vao definir os passos e o tempo de simulacao a ser usado
   Como o passo a ser escrito no arquivo de saida pode nao ser o mesmo do passo da
   integracao, vamos definir os dois separadamente*/
-double tempo_simulacao, passo_simulacao, passo_saida;
+double tempo_simulacao, passo_simulacao;
 //double tempo_atual;
 double gminAtual = GMIN_INICIAL;
 double fator = 10;
@@ -130,6 +130,7 @@ int
   numeroNos, /* Nos */
   i,j,k;
 
+unsigned passosPorPonto = 1;
 unsigned contadorElementosVariantes = 0;
 unsigned contadorElementosNaoLineares = 0;
 unsigned short temCapacitorOuIndutor = 0;
@@ -153,6 +154,7 @@ double
   YnInvariantes[MAX_NOS+1][MAX_NOS+2],
   solucaoAnterior[MAX_NOS+2],
   newtonRaphsonAnterior[MAX_NOS+2],
+  newtonRaphsonAnteriorConvergiu[MAX_NOS+2],
   erros[MAX_NOS+1];
 
 /*  Rotina para Resolucao de sistema de equacoes lineares.
@@ -228,6 +230,20 @@ void ArmazenarNRAnterior()
   unsigned i;
   for (i=0; i<=numeroVariaveis+1; i++)
     newtonRaphsonAnterior[i] = Yn[i][numeroVariaveis+1]; /*pega a ultima coluna de Yn: solucao do sistema*/
+}
+
+void ArmazenarUltimoNRConvergiu()
+{
+  unsigned i;
+  for (i=0; i<=numeroVariaveis+1; i++)
+    newtonRaphsonAnteriorConvergiu[i] = Yn[i][numeroVariaveis+1]; /*pega a ultima coluna de Yn: solucao do sistema*/
+}
+
+void ArmazenarResultadoNaoConvergencia()
+{
+  unsigned i;
+  for (i=0; i<=numeroVariaveis+1; i++)
+    solucaoAnterior[i] = newtonRaphsonAnteriorConvergiu[i]; /*pega a ultima coluna de Yn: solucao do sistema*/
 }
 
 void ZerarNRAnterior ()
@@ -456,8 +472,8 @@ void LerNetlist (FILE *arquivo)
     {
       if (strcmp (netlist[numeroElementos].nome, ".TRAN") == 0)
       {
-        sscanf(p, "%lg%lg%*10s%lg", &tempo_simulacao, &passo_simulacao, &passo_saida);
-        printf("%lg %lg %lg\n", tempo_simulacao, passo_simulacao, passo_saida);
+        sscanf(p, "%lg%lg%*10s%u", &tempo_simulacao, &passo_simulacao, &passosPorPonto);
+        printf("%lg %lg %u\n", tempo_simulacao, passo_simulacao, passosPorPonto);
       }
       numeroElementos--;
     }
@@ -721,12 +737,12 @@ void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pon
 
       tensaoAtual = newtonRaphsonAnterior[elementoNaoLinear.a] - newtonRaphsonAnterior[elementoNaoLinear.b];
 
-      if (tensaoAtual < elementoNaoLinear.resistorPartes.v2)
+      if (tensaoAtual <= elementoNaoLinear.resistorPartes.v2)
       {
         g = (elementoNaoLinear.resistorPartes.j2 - elementoNaoLinear.resistorPartes.j1)/(elementoNaoLinear.resistorPartes.v2 - elementoNaoLinear.resistorPartes.v1);
         z = (elementoNaoLinear.resistorPartes.j2 - g*elementoNaoLinear.resistorPartes.v2);
       }
-      else if (tensaoAtual < elementoNaoLinear.resistorPartes.v3)
+      else if (tensaoAtual <= elementoNaoLinear.resistorPartes.v3)
       {
         g = (elementoNaoLinear.resistorPartes.j3 - elementoNaoLinear.resistorPartes.j2)/(elementoNaoLinear.resistorPartes.v3 - elementoNaoLinear.resistorPartes.v2);
         z = (elementoNaoLinear.resistorPartes.j3 - g*elementoNaoLinear.resistorPartes.v3);
@@ -756,14 +772,14 @@ unsigned TestarConvergenciaNR () /*teste de convergencia*/
 
 	for (i=1; i<=numeroVariaveis;i++)
 	{
-		if (fabs(Yn[i][numeroVariaveis+1]) > X_ERRO)
-		{
-			erros[i] = X_ERRO*fabs((Yn[i][numeroVariaveis+1]-newtonRaphsonAnterior[i])/Yn[i][numeroVariaveis+1]);
-		}
-		else
-		{
+		// if (fabs(Yn[i][numeroVariaveis+1]) > X_ERRO)
+		// {
+		// 	erros[i] = X_ERRO*fabs((Yn[i][numeroVariaveis+1]-newtonRaphsonAnterior[i])/Yn[i][numeroVariaveis+1]);
+		// }
+		// else
+		// {
 			erros[i] = fabs(Yn[i][numeroVariaveis+1]-newtonRaphsonAnterior[i]);
-		}
+		//}
 
 		if (erros[i] > MAX_ERRO_NR)
 			return 0;
@@ -777,14 +793,14 @@ unsigned TestarConvergenciaGMin () /*teste de convergencia*/
 
 	for (i=1; i<=numeroVariaveis;i++)
 	{
-		if (fabs(Yn[i][numeroVariaveis+1]) > X_ERRO)
-		{
-			erros[i] = X_ERRO*fabs((Yn[i][numeroVariaveis+1]-newtonRaphsonAnterior[i])/Yn[i][numeroVariaveis+1]);
-		}
-		else
-		{
+		// if (fabs(Yn[i][numeroVariaveis+1]) > X_ERRO)
+		// {
+		// 	erros[i] = X_ERRO*fabs((Yn[i][numeroVariaveis+1]-newtonRaphsonAnterior[i])/Yn[i][numeroVariaveis+1]);
+		// }
+		// else
+		//{
 			erros[i] = fabs(Yn[i][numeroVariaveis+1]-newtonRaphsonAnterior[i]);
-		}
+		//}
 
 		if (erros[i] > MAX_ERRO_NR)
 			return 0;
@@ -887,7 +903,7 @@ void MontarEstampasGMin() /*acho que faz sentido, tem que testar*/
   #endif
 } /*MontarEstampasGMin*/
 
-void ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned int pontoOperacao)
+unsigned ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned int pontoOperacao)
 {
   unsigned convergiu;
   unsigned i,k,j, contadorFator;
@@ -930,7 +946,7 @@ void ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned int p
       {
         // printf("Convergiu!\n");
         //ArmazenarResultadoAnterior();
-        return;
+        return 1;
       }
       ArmazenarNRAnterior();
     }
@@ -976,13 +992,14 @@ void ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned int p
     if (convergiu == 1)
     {
       printf("Entrei no convergiu no tempo %lg\n", tempo);
+      ArmazenarUltimoNRConvergiu();
       // printf("Gmin atual: %lg\n",gminAtual);
       if (gminAtual < GMIN_MINIMA)
       {
         printf("Convergiu GMin!\n");
-        ArmazenarResultadoAnterior();
+        //ArmazenarResultadoAnterior();
         fator = 100;
-        return;
+        return 1;
       }
       fator = 100;
       i = 1;
@@ -994,7 +1011,7 @@ void ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned int p
       {
         printf("Nao converge nem com Gmin Stepping\n");
         //ArmazenarNRAnterior();  /*Nao sei se tenho que armazenar o anterior ou não, acho que sim*/
-        //return;
+        return 0;
       }
       fator = pow(2,(pow(0.5, double(contadorFator))));
       contadorFator++;
@@ -1286,6 +1303,8 @@ int main(void)
   numeroElementos=0;
   numeroVariaveis=0;
   double tempo_atual = 0.0;
+  unsigned convergencia = 0;
+  unsigned contadorPasso = 1;
   strcpy(lista[0],"0");
   printf("Nome do arquivo com o netlist (ex: mna.net): ");
   scanf("%50s",nomeArquivo);
@@ -1307,6 +1326,13 @@ int main(void)
     fprintf(arquivoSaida, " %s", lista[i]);
   fprintf(arquivoSaida, "\n");
 
+  if (passosPorPonto != 1)
+  {
+    // printf("Passos por ponto %u\n", passosPorPonto);
+    passo_simulacao = passo_simulacao/passosPorPonto;
+    // printf("Passo atual: %lg\n", passoTeste);
+
+  }
   ZerarSistema();
   MontarEstampasInvariantes();
   CopiarEstampaInvariante();
@@ -1320,8 +1346,9 @@ int main(void)
   }
   else if (contadorElementosNaoLineares != 0)
   {
-    ResolverNewtonRaphson(tempo_atual, passo_simulacao, 1);
-    ArmazenarResultadoAnterior();
+    convergencia = ResolverNewtonRaphson(tempo_atual, passo_simulacao, 1);
+    if (convergencia)
+      ArmazenarResultadoAnterior();
   }
 
 
@@ -1332,8 +1359,10 @@ int main(void)
     if (contadorElementosNaoLineares != 0)
     {
       /*Newton-Raphson com parametros do sistema inicial (ponto de operacao)*/
-      ResolverNewtonRaphson(tempo_atual, passo_simulacao, 0);
-      ArmazenarResultadoAnterior();
+      convergencia = ResolverNewtonRaphson(tempo_atual, passo_simulacao, 0);
+      if (convergencia)
+        ArmazenarResultadoAnterior();
+
       if (temCapacitorOuIndutor == 1) /*COMO FAZER ISSO DE UMA FORMA MAIS ESPERTA?*/
         CalcularMemorias(0, passo_simulacao);  /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
         //ZerarResultadoAnterior();
@@ -1354,13 +1383,19 @@ int main(void)
       }
     }
 
-    /*Escreve no arquivo de saida*/
-    fprintf(arquivoSaida,"%lg", tempo_atual);
-    for (i=1; i<=numeroVariaveis; i++)
+    if (contadorPasso == passosPorPonto)
     {
-      fprintf(arquivoSaida," %lg", Yn[i][numeroVariaveis+1]);
+      /*Escreve no arquivo de saida*/
+      fprintf(arquivoSaida,"%lg", tempo_atual);
+      for (i=1; i<=numeroVariaveis; i++)
+      {
+        fprintf(arquivoSaida," %lg", Yn[i][numeroVariaveis+1]);
+      }
+      fprintf(arquivoSaida,"\n");
+      contadorPasso = 1;
     }
-    fprintf(arquivoSaida,"\n");
+
+    contadorPasso++;
 
   }/*for analise no tempo*/
 
