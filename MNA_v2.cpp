@@ -1383,7 +1383,7 @@ int main(void)
       }
     }
 
-    if (contadorPasso == passosPorPonto)
+    if (contadorPasso == passosPorPonto || passosPorPonto == 1)
     {
       /*Escreve no arquivo de saida*/
       fprintf(arquivoSaida,"%lg", tempo_atual);
