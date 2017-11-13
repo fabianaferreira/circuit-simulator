@@ -41,7 +41,7 @@ Os nos podem ser nomes
 #define PI acos(-1.0)
 #define PO_CAPACITOR        1e9
 #define PO_INDUTOR          1e-9
-#define MAX_ERRO_NR         1e-5
+#define MAX_ERRO_NR         1e-7
 //#define MAX_ERRO_GMIN       1e-5
 #define X_ERRO              1
 #define MAX_ITERACOES       50
@@ -823,7 +823,7 @@ void MontarEstampasGMin() /*acho que faz sentido, tem que testar*/
       tensao1 = netlist[elementosNaoLineares[i]].resistorPartes.v2;
       tensao2 = netlist[elementosNaoLineares[i]].resistorPartes.v3;
       fonteGMin = (tensao1 + tensao2)/2;
-      // printf("Fonte Gmin: %lg\n", fonteGMin);
+      printf("Fonte Gmin: %lg\n", fonteGMin);
     }
 
     if (no1 == 0 || no2 == 0)
