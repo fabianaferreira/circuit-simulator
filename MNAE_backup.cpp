@@ -720,10 +720,13 @@ void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pon
       if (tensaoAtual < elementoNaoLinear.chaveResistiva.vLim)
       {
         z = 0;
-        Yn[elementoNaoLinear.a][elementoNaoLinear.a]+=elementoNaoLinear.chaveResistiva.goff;
-        Yn[elementoNaoLinear.b][elementoNaoLinear.b]+=elementoNaoLinear.chaveResistiva.goff;
-        Yn[elementoNaoLinear.a][elementoNaoLinear.b]-=elementoNaoLinear.chaveResistiva.goff;
-        Yn[elementoNaoLinear.b][elementoNaoLinear.a]-=elementoNaoLinear.chaveResistiva.goff;
+        g = elementoNaoLinear.chaveResistiva.goff;
+        Yn[elementoNaoLinear.a][elementoNaoLinear.a]+=g;
+        Yn[elementoNaoLinear.b][elementoNaoLinear.b]+=g;
+        Yn[elementoNaoLinear.a][elementoNaoLinear.b]-=g;
+        Yn[elementoNaoLinear.b][elementoNaoLinear.a]-=g;
+        g_anterior[contador]  = g;
+        z_anterior[contador] = z;
       }
       else if (tensaoAtual == elementoNaoLinear.chaveResistiva.vLim && tempo != 0.0)
       {
@@ -735,10 +738,13 @@ void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pon
       else
       {
         z = 0;
-        Yn[elementoNaoLinear.a][elementoNaoLinear.a]+=elementoNaoLinear.chaveResistiva.gon;
-        Yn[elementoNaoLinear.b][elementoNaoLinear.b]+=elementoNaoLinear.chaveResistiva.gon;
-        Yn[elementoNaoLinear.a][elementoNaoLinear.b]-=elementoNaoLinear.chaveResistiva.gon;
-        Yn[elementoNaoLinear.b][elementoNaoLinear.a]-=elementoNaoLinear.chaveResistiva.gon;
+        g = elementoNaoLinear.chaveResistiva.gon;
+        Yn[elementoNaoLinear.a][elementoNaoLinear.a]+=g;
+        Yn[elementoNaoLinear.b][elementoNaoLinear.b]+=g;
+        Yn[elementoNaoLinear.a][elementoNaoLinear.b]-=g;
+        Yn[elementoNaoLinear.b][elementoNaoLinear.a]-=g;
+        g_anterior[contador]  = g;
+        z_anterior[contador] = z;
       }
     }
     else if (elementoNaoLinear.nome[0] == 'N')
@@ -754,6 +760,7 @@ void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pon
       {
         g = (elementoNaoLinear.resistorPartes.j2 - elementoNaoLinear.resistorPartes.j1)/(elementoNaoLinear.resistorPartes.v2 - elementoNaoLinear.resistorPartes.v1);
         z = (elementoNaoLinear.resistorPartes.j2 - g*elementoNaoLinear.resistorPartes.v2);
+
       }
       else if (tensaoAtual == elementoNaoLinear.resistorPartes.v2 && tempo != 0.0)
       {
@@ -781,6 +788,8 @@ void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pon
       Yn[elementoNaoLinear.b][elementoNaoLinear.a]-=g;
       Yn[elementoNaoLinear.a][numeroVariaveis+1]-=z;
       Yn[elementoNaoLinear.b][numeroVariaveis+1]+=z;
+      g_anterior[contador]  = g;
+      z_anterior[contador] = z;
     } /*resistor linear por partes*/
     #ifdef  DEBUG
       printf("Sistema remontado apos iteracao do NR\n");
