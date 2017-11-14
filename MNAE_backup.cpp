@@ -1386,7 +1386,7 @@ int main(void)
   fprintf(arquivoSaida,"%lg", tempo_atual);
   for (i=1; i<=numeroVariaveis; i++)
   {
-    fprintf(arquivoSaida," %lg", Yn[i][numeroVariaveis+1]);
+    fprintf(arquivoSaida," %lg", solucaoAnterior[i]);
   }
   fprintf(arquivoSaida,"\n");
 
@@ -1428,7 +1428,7 @@ int main(void)
       fprintf(arquivoSaida,"%lg", tempo_atual);
       for (i=1; i<=numeroVariaveis; i++)
       {
-        fprintf(arquivoSaida," %lg", Yn[i][numeroVariaveis+1]);
+        fprintf(arquivoSaida," %lg", solucaoAnterior[i]);
       }
       fprintf(arquivoSaida,"\n");
       contadorPasso = 1;
