@@ -221,28 +221,29 @@ int NumerarNo(char *nome)
 void ArmazenarResultadoAnterior()
 {
   unsigned i;
-  for (i=0; i<=numeroVariaveis+1; i++)
+  for (i=1; i<=numeroVariaveis; i++)
     solucaoAnterior[i] = Yn[i][numeroVariaveis+1]; /*pega a ultima coluna de Yn: solucao do sistema*/
+  solucaoAnterior[0] = 0;
 }
 
 void ArmazenarNRAnterior()
 {
   unsigned i;
-  for (i=0; i<=numeroVariaveis+1; i++)
+  for (i=1; i<=numeroVariaveis; i++)
     newtonRaphsonAnterior[i] = Yn[i][numeroVariaveis+1]; /*pega a ultima coluna de Yn: solucao do sistema*/
 }
 
 void ZerarNRAnterior ()
 {
   unsigned i;
-  for (i=0; i<=numeroVariaveis+1; i++)
+  for (i=0; i<=numeroVariaveis; i++)
     newtonRaphsonAnterior[i] = 0;
 }
 
 void ZerarVetorErros ()
 {
   unsigned i;
-  for (i=0; i<=numeroVariaveis+1; i++)
+  for (i=1; i<=numeroVariaveis; i++)
     erros[i] = 0;
 }
 
@@ -582,8 +583,9 @@ void MontarEstampasVariantes (double tempo, double passo_simulacao, unsigned pon
             elementoVariante.valor = amplitude2;
 
           else if (tempoReal < tempo_subida + tempo_ligada + tempo_descida)
-            elementoVariante.valor = ((amplitude2 - amplitude1)/tempo_descida)*(tempoReal - (tempo_subida + tempo_ligada));
-
+          {
+            elementoVariante.valor = ((amplitude1 - amplitude2)/tempo_descida)*(tempoReal - (tempo_subida + tempo_ligada)) + amplitude2;
+          }
           else
             elementoVariante.valor = amplitude1;
         }
@@ -678,10 +680,10 @@ void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pon
     elementoNaoLinear = netlist[elementosNaoLineares[contador]];
     if (elementoNaoLinear.nome[0] == '$') /*chave: elemento nao-linear*/
     {
-      if (elementoNaoLinear.c == 0)
-        newtonRaphsonAnterior[elementoNaoLinear.c] = 0;
-      else if (elementoNaoLinear.d == 0)
-        newtonRaphsonAnterior[elementoNaoLinear.d] = 0;
+      // if (elementoNaoLinear.c == 0)
+      //   newtonRaphsonAnterior[elementoNaoLinear.c] = 0;
+      // else if (elementoNaoLinear.d == 0)
+      //   newtonRaphsonAnterior[elementoNaoLinear.d] = 0;
 
       tensaoAtual = newtonRaphsonAnterior[elementoNaoLinear.c] - newtonRaphsonAnterior[elementoNaoLinear.d];
       if (tensaoAtual < elementoNaoLinear.chaveResistiva.vLim)
@@ -716,10 +718,10 @@ void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pon
     }
     else if (elementoNaoLinear.nome[0] == 'N')
     {
-      if (elementoNaoLinear.a == 0)
-        newtonRaphsonAnterior[elementoNaoLinear.a] = 0;
-      else if (elementoNaoLinear.b == 0)
-        newtonRaphsonAnterior[elementoNaoLinear.b] = 0;
+      // if (elementoNaoLinear.a == 0)
+      //   newtonRaphsonAnterior[elementoNaoLinear.a] = 0;
+      // else if (elementoNaoLinear.b == 0)
+      //   newtonRaphsonAnterior[elementoNaoLinear.b] = 0;
 
       tensaoAtual = newtonRaphsonAnterior[elementoNaoLinear.a] - newtonRaphsonAnterior[elementoNaoLinear.b];
 
@@ -826,92 +828,96 @@ void MontarEstampasGMin() /*acho que faz sentido, tem que testar*/
 {
   //printf("Condutancia atual: %lg\n", condutanciaAtual);
   double condutancia = gminAtual;
-  unsigned i, k, l, contador, no1, no2, no1Atual, no2Atual;
+  unsigned i, k, l, contador, no1, no2;
   double erroAtual, tensao1, tensao2;
   double fonteGMin = 0;
   unsigned vetorErros[MAX_NOS + 1];
   char tipo;
-  contador = 0;
-  for (i=1; i <= numeroVariaveis; i++) /*achando os nos que tem tensoes nodais com erro maior do que o permitido*/
+
+  for (i=1; i <= numeroNos; i++) /*achando os nos que tem tensoes nodais com erro maior do que o permitido*/
   {
     erroAtual = erros[i];
-    if (erroAtual >= MAX_ERRO_NR)
-    {
-      // printf("Nao to convergindo\n");
-      vetorErros[contador] = i;
-      contador++;
-      // printf("Vetor erros posicao i = %u\n", vetorErros[i]);
-    }
+    if (erroAtual > MAX_ERRO_NR)
+      vetorErros[i] = 1;
+    else vetorErros[i] = 0;
   }
+  vetorErros[0] = 0;
+
+  // for (i=1; i <= numeroVariaveis; i++) /*achando os nos que tem tensoes nodais com erro maior do que o permitido*/
+  // {
+  //   if (vetorErros[i] == 1)
+  //   {
+  //     for (j =1; j < numeroElementos; j++)
+  //     {
+  //       if (netlist[i].a == j || netlist[i].b == j)
+  //       {
+  //         if (netlist[j].nome[0] == 'N')
+  //           fonteGMin = (netlist[j].resistorPartes.v2 - netlist[i].resistorPartes.v2)*(condutancia/2);
+  //         else if (netlist[j].nome[0] == '$')
+  //           fonteGMin = 0;
+  //
+  //         Yn[netlist[j].a][netlist[i].a] += condutancia;
+  //         Yn[netlist[i].b][netlist[i].b] += condutancia;
+  //         Yn[netlist[j].a][netlist[i].b] -= condutancia;
+  //         Yn[netlist[i].b][netlist[j].a] -= condutancia;
+  //         Yn[netlist[j].a][numeroVariaveis + 1] += fonteGMin*condutancia;
+  //         Yn[netlist[i].b][numeroVariaveis + 1] -= fonteGMin*condutancia;
+  //       }
+  //     }
+  //   }
+  // }
+
+  // printf("Contador elementos nao lineares: %u\n", contadorElementosNaoLineares);
+
   for (i=0; i < contadorElementosNaoLineares; i++)
   {
+    tipo = netlist[elementosNaoLineares[i]].nome[0];
     no1 = netlist[elementosNaoLineares[i]].a;
     no2 = netlist[elementosNaoLineares[i]].b;
-    tipo = netlist[elementosNaoLineares[i]].nome[0];
 
     if (tipo == 'N') /* se resistor linear por partes coloca uma fonte de tensao em serie com a condutancia*/
     {
       tensao1 = netlist[elementosNaoLineares[i]].resistorPartes.v2;
       tensao2 = netlist[elementosNaoLineares[i]].resistorPartes.v3;
       fonteGMin = (tensao1 + tensao2)/2;
-      // printf("Fonte Gmin: %lg\n", fonteGMin);
+    //   printf("Fonte Gmin: %lg\n", fonteGMin);
     }
+    else fonteGMin = 0;
 
-    if (no1 == 0 || no2 == 0)
+    if (vetorErros[no1] == 1) /*tensoes nodais com erro maior do que o permitido*/
     {
-      // printf("Entrei no if de um dos nos ser terra\n");
-      for (k=0; k < contador; k++)
+      if (vetorErros[no2] == 1)
       {
-        if (no1 == vetorErros[k])
-        {
-          Yn[no1][no1] += condutancia;
-          Yn[no1][numeroVariaveis + 1] += fonteGMin*condutancia;
-          break;
-        }
-
-        else if (no2 == vetorErros[k])
-        {
-          Yn[no2][no2] += condutancia;
-          Yn[no2][numeroVariaveis + 1] -= fonteGMin*condutancia;
-          break;
-        }
+        Yn[no1][no1] += condutancia;
+        Yn[no2][no2] += condutancia;
+        Yn[no1][no2] -= condutancia;
+        Yn[no2][no1] -= condutancia;
+        Yn[no1][numeroVariaveis + 1] += fonteGMin*condutancia;
+        Yn[no2][numeroVariaveis + 1] -= fonteGMin*condutancia;
+      }
+      else if (no2 == 0)
+      {
+        Yn[no1][no1] += condutancia;
+        // Yn[no2][no2] += condutancia;
+        // Yn[no1][no2] -= condutancia;
+        // Yn[no2][no1] -= condutancia;
+        Yn[no1][numeroVariaveis + 1] += fonteGMin*condutancia;
+        // Yn[no2][numeroVariaveis + 1] -= fonteGMin*condutancia;
       }
     }
-    else
+    else if (no1 == 0)
     {
-      for (k=0; k < contador; k++)
+      if (vetorErros[no2] == 1)
       {
-        no1Atual = vetorErros[k];
-        for (l=k+1; l < contador; l++)
-        {
-          no2Atual = vetorErros[l];
-          if ((no1Atual == no1 && no2Atual == no2) || (no1Atual == no2 && no2Atual == no1))
-          {
-            if (no1Atual == no1)
-            {
-              /*Monta estampa*/
-              Yn[no1Atual][no1Atual] += condutancia;
-              Yn[no2Atual][no2Atual] += condutancia;
-              Yn[no1Atual][no2Atual] -= condutancia;
-              Yn[no2Atual][no1Atual] -= condutancia;
-              Yn[no1Atual][numeroVariaveis + 1] += fonteGMin*condutancia;
-              Yn[no2Atual][numeroVariaveis + 1] -= fonteGMin*condutancia;
-            }
-            else
-            {
-              /*Monta estampa*/
-              Yn[no1Atual][no1Atual] += condutancia;
-              Yn[no2Atual][no2Atual] += condutancia;
-              Yn[no1Atual][no2Atual] -= condutancia;
-              Yn[no2Atual][no1Atual] -= condutancia;
-              Yn[no1Atual][numeroVariaveis + 1] += fonteGMin*condutancia;
-              Yn[no2Atual][numeroVariaveis + 1] -= fonteGMin*condutancia;
-            }
-          }
-        } /*for vetorErros de dentro*/
-      } /*for vetorErros de fora*/
-    } /*se nenhum dos dois nos for terra*/
-  } /*For elementos não lineares*/
+        // Yn[no1][no1] += condutancia;
+        Yn[no2][no2] += condutancia;
+        // Yn[no1][no2] -= condutancia;
+        // Yn[no2][no1] -= condutancia;
+        // Yn[no1][numeroVariaveis + 1] += fonteGMin*condutancia;
+        Yn[no2][numeroVariaveis + 1] -= fonteGMin*condutancia;
+      }
+    }
+  }
   #ifdef  DEBUG_GMIN
     printf("Sistema remontado apos iteracao do GMin\n");
     MostrarSistema();
@@ -976,7 +982,7 @@ unsigned ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned i
       newtonRaphsonAnterior[i] = solucaoAnterior[i];
   }
 
-  i = 1;
+  // i = 1;
   gminAtual = GMIN_INICIAL;
 
   while (gminAtual > GMIN_MINIMA)
@@ -984,6 +990,7 @@ unsigned ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned i
     for (i=1; i <= MAX_ITERACOES; i++)
     {
       /*Monta tudo que é linear e tudo que é não-linear com base no resultado anterior*/
+      ZerarSistema();
       MontarNewtonRaphson(tempo, passo_simulacao, pontoOperacao);
       MontarEstampasGMin();
       if (ResolverSistema())
@@ -1356,6 +1363,11 @@ int main(void)
       convergencia = ResolverNewtonRaphson(tempo_atual, passo_simulacao, 0);
       if (convergencia)
         ArmazenarResultadoAnterior();
+      else
+      {
+        printf("Nao convergiu nem com Gmin na vida\n");
+        exit(0);
+      }
 
       if (temCapacitorOuIndutor == 1) /*COMO FAZER ISSO DE UMA FORMA MAIS ESPERTA?*/
         CalcularMemorias(0, passo_simulacao);  /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
@@ -1370,7 +1382,7 @@ int main(void)
         getch();
         exit(0);
       }
-      if (temCapacitorOuIndutor == 1) /*COMO FAZER ISSO DE UMA FORMA MAIS ESPERTA?*/
+      if (temCapacitorOuIndutor == 1)
       {
         ArmazenarResultadoAnterior();
         CalcularMemorias(0, passo_simulacao);  /*armazeno as correntes nos capacitores e as tensoes nos indutores do resultado anterior*/
