@@ -9,18 +9,16 @@ Fonte I:                      I<nome> <no+> <no-> <parametros>
 Fonte V:                      V<nome> <no+> <no-> <parametros>
 Amp. op.:                     O<nome> <vo1> <vo2> <vi1> <vi2>
 Resistor linear por partes:   N<nome> <no+> <no-> <4 pontos vi, ji>
+Chave:                        $<nome> <noa> <nob> <noContc> <noContd> <gon> <goff> <vref>
 Capacitor:                    C<nome> <no1> <no2> <capacitancia>
 Indutor:                      L<nome> <no1> <no2> <indutancia>
 Transformador ideal:          K<nome> <noa> <nob> <noc> <nod> <n>
-Chave:                        $<nome> <noa> <nob> <noContc> <noContd> <gon> <goff> <vref>
 Comentario:                   *<comentario>
 Parametros:
 Fonte contínua: DC <valor>
 Fonte senoidal: SIN <nível contínuo> <amplitude> <frequência em Hz> <atraso> <amortecimento> <defasagem em graus> <número de ciclos>
 Fonte pulsada: PULSE <amplitude 1> <amplitude 2> <atraso> <tempo de subida> <tempo de descida> <tempo ligada> <período> <número de ciclos>
-As fontes F e H tem o ramo de entrada em curto
-O amplificador operacional ideal tem a saida suspensa
-Os nos podem ser nomes
+
 */
 
 #include <stdio.h>
