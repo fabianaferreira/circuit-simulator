@@ -41,13 +41,14 @@ Os nos podem ser nomes
 #define PI acos(-1.0)
 #define PO_CAPACITOR        1e9
 #define PO_INDUTOR          1e-9
-#define MAX_ERRO_NR         1e-5
+#define MAX_ERRO_NR         1e-6
 //#define MAX_ERRO_GMIN       1e-5
 #define X_ERRO              1
-#define MAX_ITERACOES       50
+#define MAX_ITERACOES       100
 #define MAX_INICIALIZACOES  10
-#define GMIN_INICIAL        exp(15)
-#define GMIN_MINIMA         exp(-8)
+#define GMIN_INICIAL        1.1
+#define GMIN_MINIMA         1e-12
+#define GMIN_MENOR_FATOR    1.1
 #define NOME_ARQUIVO_SAIDA "saida_simulacao.tab"
 
 //#define DEBUG
@@ -119,6 +120,8 @@ double tempo_simulacao, passo_simulacao;
 //double tempo_atual;
 double gminAtual = GMIN_INICIAL;
 double fator = 10;
+double g_anterior[MAX_ELEM];
+double z_anterior [MAX_ELEM];
 
 elemento netlist[MAX_ELEM]; /* Netlist */
 int elementosVariantes[MAX_ELEM];
@@ -506,10 +509,6 @@ void MontarEstampasVariantes (double tempo, double passo_simulacao, unsigned pon
          tempo_ligada,
          periodo,
          tensaoAtual;
-    double coefAng,
-           coefLin,
-           t1,
-           t2;
 
     if (pontoOperacao == 1)
       tempo = 0.0; /*fontes variantes calculadas em 0.0 para ponto de operacao*/
@@ -529,13 +528,18 @@ void MontarEstampasVariantes (double tempo, double passo_simulacao, unsigned pon
         nivel_dc = elementoVariante.fonte_seno.nivel_dc;
         amortecimento = elementoVariante.fonte_seno.amortecimento;
         ciclos = elementoVariante.fonte_seno.ciclos;
-        ciclos_passados = freq*tempo;
+        // ciclos_passados = freq*(tempo-atraso);
         //printf("Ciclos %u Ciclos passados %u\n", ciclos, ciclos_passados);
-        if (ciclos_passados >= ciclos)
-          elementoVariante.valor = 0;
+
+        if (tempo > atraso + ciclos/freq)
+          tempo = atraso + ciclos/freq;
+
+        if (tempo < atraso)
+          elementoVariante.valor = nivel_dc + amplitude*(sin(PI*defasagem/180));
         else
           elementoVariante.valor = nivel_dc +
                                    amplitude*(exp(-amortecimento*(tempo - atraso)))*(sin(2*PI*freq*(tempo - atraso) + (PI*defasagem)/180));
+
         //printf("Valor fonte seno: %lg em t = %lg\n", elementoVariante.valor, tempo);
       }
       /*Tá dando merda, tem que tudo, inclusive os extremos*/
@@ -554,13 +558,20 @@ void MontarEstampasVariantes (double tempo, double passo_simulacao, unsigned pon
         /*Tratando descontinuidades*/
         if (tempo_subida == 0)
           tempo_subida = passo_simulacao;
+        else
+          tempo_subida = tempo_subida;
+
         if (tempo_descida == 0)
           tempo_descida = passo_simulacao;
+        else
+          tempo_descida = tempo_descida;
+
+        // printf("Tempo de subida antes dos ifs: %lg\n", tempo_subida);
 
         double tempoReal = tempo - atraso;
         //printf("Tempo atual: %lg\n", tempo);
         tempoReal = fmod(tempoReal, periodo);
-        double tempoDesligada = periodo - (tempo_subida + tempo_descida + tempo_ligada);
+        // double tempoDesligada = periodo - (tempo_subida + tempo_descida + tempo_ligada);
 
         if (tempo <= atraso)
           elementoVariante.valor = amplitude1;
@@ -582,6 +593,8 @@ void MontarEstampasVariantes (double tempo, double passo_simulacao, unsigned pon
           else
             elementoVariante.valor = amplitude1;
         }
+        // printf("Tempo de subida depois dos ifs: %lg\n", tempo_subida);
+
       } /*if pulse*/
 
       g=elementoVariante.valor;
@@ -713,19 +726,34 @@ void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pon
         newtonRaphsonAnterior[elementoNaoLinear.d] = 0;
 
       tensaoAtual = newtonRaphsonAnterior[elementoNaoLinear.c] - newtonRaphsonAnterior[elementoNaoLinear.d];
-      if (tensaoAtual <= elementoNaoLinear.chaveResistiva.vLim)
+      if (tensaoAtual < elementoNaoLinear.chaveResistiva.vLim)
       {
-        Yn[elementoNaoLinear.a][elementoNaoLinear.a]+=elementoNaoLinear.chaveResistiva.goff;
-        Yn[elementoNaoLinear.b][elementoNaoLinear.b]+=elementoNaoLinear.chaveResistiva.goff;
-        Yn[elementoNaoLinear.a][elementoNaoLinear.b]-=elementoNaoLinear.chaveResistiva.goff;
-        Yn[elementoNaoLinear.b][elementoNaoLinear.a]-=elementoNaoLinear.chaveResistiva.goff;
+        z = 0;
+        g = elementoNaoLinear.chaveResistiva.goff;
+        Yn[elementoNaoLinear.a][elementoNaoLinear.a]+=g;
+        Yn[elementoNaoLinear.b][elementoNaoLinear.b]+=g;
+        Yn[elementoNaoLinear.a][elementoNaoLinear.b]-=g;
+        Yn[elementoNaoLinear.b][elementoNaoLinear.a]-=g;
+        g_anterior[contador]  = g;
+        z_anterior[contador] = z;
+      }
+      else if (tensaoAtual == elementoNaoLinear.chaveResistiva.vLim && tempo != 0.0)
+      {
+        Yn[elementoNaoLinear.a][elementoNaoLinear.a]+=g_anterior[contador];
+        Yn[elementoNaoLinear.b][elementoNaoLinear.b]+=g_anterior[contador];
+        Yn[elementoNaoLinear.a][elementoNaoLinear.b]-=g_anterior[contador];
+        Yn[elementoNaoLinear.b][elementoNaoLinear.a]-=g_anterior[contador];
       }
       else
       {
-        Yn[elementoNaoLinear.a][elementoNaoLinear.a]+=elementoNaoLinear.chaveResistiva.gon;
-        Yn[elementoNaoLinear.b][elementoNaoLinear.b]+=elementoNaoLinear.chaveResistiva.gon;
-        Yn[elementoNaoLinear.a][elementoNaoLinear.b]-=elementoNaoLinear.chaveResistiva.gon;
-        Yn[elementoNaoLinear.b][elementoNaoLinear.a]-=elementoNaoLinear.chaveResistiva.gon;
+        z = 0;
+        g = elementoNaoLinear.chaveResistiva.gon;
+        Yn[elementoNaoLinear.a][elementoNaoLinear.a]+=g;
+        Yn[elementoNaoLinear.b][elementoNaoLinear.b]+=g;
+        Yn[elementoNaoLinear.a][elementoNaoLinear.b]-=g;
+        Yn[elementoNaoLinear.b][elementoNaoLinear.a]-=g;
+        g_anterior[contador]  = g;
+        z_anterior[contador] = z;
       }
     }
     else if (elementoNaoLinear.nome[0] == 'N')
@@ -737,15 +765,26 @@ void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pon
 
       tensaoAtual = newtonRaphsonAnterior[elementoNaoLinear.a] - newtonRaphsonAnterior[elementoNaoLinear.b];
 
-      if (tensaoAtual <= elementoNaoLinear.resistorPartes.v2)
+      if (tensaoAtual < elementoNaoLinear.resistorPartes.v2)
       {
         g = (elementoNaoLinear.resistorPartes.j2 - elementoNaoLinear.resistorPartes.j1)/(elementoNaoLinear.resistorPartes.v2 - elementoNaoLinear.resistorPartes.v1);
         z = (elementoNaoLinear.resistorPartes.j2 - g*elementoNaoLinear.resistorPartes.v2);
+
       }
-      else if (tensaoAtual <= elementoNaoLinear.resistorPartes.v3)
+      else if (tensaoAtual == elementoNaoLinear.resistorPartes.v2 && tempo != 0.0)
+      {
+        g = g_anterior[contador];
+        z = z_anterior[contador];
+       }
+      else if (tensaoAtual < elementoNaoLinear.resistorPartes.v3)
       {
         g = (elementoNaoLinear.resistorPartes.j3 - elementoNaoLinear.resistorPartes.j2)/(elementoNaoLinear.resistorPartes.v3 - elementoNaoLinear.resistorPartes.v2);
         z = (elementoNaoLinear.resistorPartes.j3 - g*elementoNaoLinear.resistorPartes.v3);
+      }
+      else if (tensaoAtual == elementoNaoLinear.resistorPartes.v3 && tempo != 0.0)
+      {
+        g = g_anterior[contador];
+        z = z_anterior[contador];
       }
       else
       {
@@ -758,6 +797,8 @@ void MontarNewtonRaphson (double tempo, double passo_simulacao, unsigned int pon
       Yn[elementoNaoLinear.b][elementoNaoLinear.a]-=g;
       Yn[elementoNaoLinear.a][numeroVariaveis+1]-=z;
       Yn[elementoNaoLinear.b][numeroVariaveis+1]+=z;
+      g_anterior[contador]  = g;
+      z_anterior[contador] = z;
     } /*resistor linear por partes*/
     #ifdef  DEBUG
       printf("Sistema remontado apos iteracao do NR\n");
@@ -787,27 +828,6 @@ unsigned TestarConvergenciaNR () /*teste de convergencia*/
 	return 1;
 }
 
-unsigned TestarConvergenciaGMin () /*teste de convergencia*/
-{
-  unsigned i;
-
-	for (i=1; i<=numeroVariaveis;i++)
-	{
-		// if (fabs(Yn[i][numeroVariaveis+1]) > X_ERRO)
-		// {
-		// 	erros[i] = X_ERRO*fabs((Yn[i][numeroVariaveis+1]-newtonRaphsonAnterior[i])/Yn[i][numeroVariaveis+1]);
-		// }
-		// else
-		//{
-			erros[i] = fabs(Yn[i][numeroVariaveis+1]-newtonRaphsonAnterior[i]);
-		//}
-
-		if (erros[i] > MAX_ERRO_NR)
-			return 0;
-	}
-	return 1;
-}
-
 void MontarEstampasGMin() /*acho que faz sentido, tem que testar*/
 {
   //printf("Condutancia atual: %lg\n", condutanciaAtual);
@@ -823,7 +843,7 @@ void MontarEstampasGMin() /*acho que faz sentido, tem que testar*/
     erroAtual = erros[i];
     if (erroAtual >= MAX_ERRO_NR)
     {
-      // printf("Erro atual no MontarEstampas: %lg\n", erroAtual);
+      printf("Erro atual no MontarEstampas: %lg\n", erroAtual);
       vetorErros[contador] = i;
       contador += 1;
     }
@@ -908,11 +928,10 @@ unsigned ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned i
   unsigned convergiu;
   unsigned i,k,j, contadorFator;
 
-  fator = 100;
+  fator = 10;
   contadorFator = 1;
   ZerarSistema();
   ZerarNRAnterior();
-  //ArmazenarEstampasNewtonRaphson(); /*vai copiar a matriz para ter a condutância colocada*/
 
   //Inicializacao das variaveis do sistema
   if (pontoOperacao == 1)
@@ -927,32 +946,30 @@ unsigned ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned i
       newtonRaphsonAnterior[i] = solucaoAnterior[i];
   }
 
-
-  for (k=1; k <= MAX_INICIALIZACOES; k++)
+  for (i=1; i <= MAX_ITERACOES; i++)
   {
-    if (k != 1)
-      InicializacaoRandomica();
-    for (i=1; i <= MAX_ITERACOES; i++)
+    /*Monta tudo que é linear e tudo que é não-linear com base no resultado anterior*/
+    MontarNewtonRaphson(tempo, passo_simulacao, pontoOperacao);
+    if (ResolverSistema())
     {
-      /*Monta tudo que é linear e tudo que é não-linear com base no resultado anterior*/
-      MontarNewtonRaphson(tempo, passo_simulacao, pontoOperacao);
-      if (ResolverSistema())
-      {
-        getch();
-        exit(0);
-      }
-      convergiu = TestarConvergenciaNR();
-      if (convergiu == 1)
-      {
-        // printf("Convergiu!\n");
-        //ArmazenarResultadoAnterior();
-        return 1;
-      }
-      ArmazenarNRAnterior();
+      getch();
+      exit(0);
     }
-    // printf("Por enquanto deu merda\n");
+    convergiu = TestarConvergenciaNR();
+    if (convergiu == 1)
+    {
+       printf("Convergiu!\n");
+      //ArmazenarResultadoAnterior();
+      return 1;
+    }
+    ArmazenarNRAnterior();
   }
+    // printf("Por enquanto deu merda\n");
+  //}
   //return; /*provisorio para não testar gmin*/
+
+  ZerarSistema();
+  ZerarNRAnterior();
 
   if (pontoOperacao == 1)
   {
@@ -969,62 +986,41 @@ unsigned ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned i
   i = 1;
   gminAtual = GMIN_INICIAL;
 
-  while (i < MAX_ITERACOES)
+  while (gminAtual > GMIN_MINIMA)
   {
-    /*Monta tudo que é linear e tudo que é não-linear com base no resultado anterior*/
-    //printf("Apos montar:\n");
-    MontarNewtonRaphson(tempo, passo_simulacao, pontoOperacao);
-    // MostrarSistema();
-    // getch();
-
-    //printf("Apos gmin estampas:\n");
-    MontarEstampasGMin();
-    // MostrarSistema();
-    // getch();
-
-    if (ResolverSistema())
+    for (i=1; i <= MAX_ITERACOES; i++)
     {
-      getch();
-      exit(0);
-    }
-    convergiu = TestarConvergenciaGMin();
-
-    if (convergiu == 1)
-    {
-      printf("Entrei no convergiu no tempo %lg\n", tempo);
-      ArmazenarUltimoNRConvergiu();
-      // printf("Gmin atual: %lg\n",gminAtual);
-      if (gminAtual < GMIN_MINIMA)
+      /*Monta tudo que é linear e tudo que é não-linear com base no resultado anterior*/
+      MontarNewtonRaphson(tempo, passo_simulacao, pontoOperacao);
+      MontarEstampasGMin();
+      if (ResolverSistema())
       {
-        printf("Convergiu GMin!\n");
-        //ArmazenarResultadoAnterior();
-        fator = 100;
-        return 1;
+        getch();
+        exit(0);
       }
-      fator = 100;
-      i = 1;
+      convergiu = TestarConvergenciaNR();
+      if (convergiu == 1)
+        break;
+      ArmazenarNRAnterior();
     }
-    else /*se não converge, divide gmin por fatores (10^(1/2))*/
+    if (convergiu)
     {
-      printf("Nao convergiu no tempo %lg\n", tempo);
-      if (fator < 1.00000001)
-      {
-        printf("Nao converge nem com Gmin Stepping\n");
-        //ArmazenarNRAnterior();  /*Nao sei se tenho que armazenar o anterior ou não, acho que sim*/
-        return 0;
-      }
-      fator = pow(2,(pow(0.5, double(contadorFator))));
-      contadorFator++;
+      fator = 10;
+      gminAtual /= fator;
     }
-    i++;
-    gminAtual /= fator;
-    ArmazenarNRAnterior();
+    else
+    {
+      fator = sqrt(fator);
+      gminAtual *= fator;
+    }
+    if (fator < GMIN_MENOR_FATOR)
+    {
+      printf("Nao converge nem com Gmin Stepping\n");
+      return 0;
+    }
+  } /*while gmin*/
+  return 1;
 
-    #ifdef  DEBUG_GMIN
-      printf("Sistema remontado apos copiar GMin\n");
-      MostrarSistema();
-    #endif
-  }/*Gmin stepping*/
 }/*ResolverNewtonRaphson*/
 
 void CalcularMemorias (unsigned pontoOperacao, double passo_simulacao)
@@ -1283,7 +1279,8 @@ void ResolverPontoOperacao (double passo_simulacao)
   }
   else /*se tiver elementos nao lineares, resolve com NR*/
   {
-    ResolverNewtonRaphson(0, passo_simulacao, 1);
+    if (ResolverNewtonRaphson(0, passo_simulacao, 1))
+      ArmazenarResultadoAnterior();
     /*Newton-Raphson que depende da solucao anterior*/
   }
 } /*ResolverPontoOperacao*/
@@ -1338,18 +1335,21 @@ int main(void)
   CopiarEstampaInvariante();
   printf("Sistema apos estampas invariantes:\n");
   MostrarSistema();
-  if (temCapacitorOuIndutor == 1 && contadorElementosNaoLineares == 0)
+  if (temCapacitorOuIndutor == 1 || contadorElementosNaoLineares != 0)
   {
     ResolverPontoOperacao(passo_simulacao);
-    //ArmazenarNRAnterior();
     MostrarSolucaoAtual();
   }
-  else if (contadorElementosNaoLineares != 0)
+
+  fprintf(arquivoSaida,"%lg", tempo_atual);
+  for (i=1; i<=numeroVariaveis; i++)
   {
-    convergencia = ResolverNewtonRaphson(tempo_atual, passo_simulacao, 1);
-    if (convergencia)
-      ArmazenarResultadoAnterior();
+    if (contadorElementosNaoLineares != 0)
+      fprintf(arquivoSaida," %lg", solucaoAnterior[i]);
+    else
+      fprintf(arquivoSaida," %lg", Yn[i][numeroVariaveis+1]);
   }
+  fprintf(arquivoSaida,"\n");
 
 
   /*Analise no tempo*/
@@ -1389,7 +1389,10 @@ int main(void)
       fprintf(arquivoSaida,"%lg", tempo_atual);
       for (i=1; i<=numeroVariaveis; i++)
       {
-        fprintf(arquivoSaida," %lg", Yn[i][numeroVariaveis+1]);
+        if (contadorElementosNaoLineares != 0)
+          fprintf(arquivoSaida," %lg", solucaoAnterior[i]);
+        else
+          fprintf(arquivoSaida," %lg", Yn[i][numeroVariaveis+1]);
       }
       fprintf(arquivoSaida,"\n");
       contadorPasso = 1;
