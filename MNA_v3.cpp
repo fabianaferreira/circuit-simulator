@@ -1307,6 +1307,7 @@ int main(void)
   double tempo_atual = 0.0;
   unsigned convergencia = 0;
   unsigned contadorPasso = 1;
+  char nomesIndutores[20];
   strcpy(lista[0],"0");
   printf("Nome do arquivo com o netlist (ex: mna.net): ");
   scanf("%50s",nomeArquivo);
@@ -1326,6 +1327,15 @@ int main(void)
   fprintf(arquivoSaida, "%s", "t");
   for (i=1; i<=numeroVariaveis; i++)
     fprintf(arquivoSaida, " %s", lista[i]);
+  for (i=1; i<=numeroVariaveis; i++)
+  {
+    if (netlist[i].nome[0] == 'L')
+    {
+      strcpy(nomesIndutores, "j");
+      strcat(nomesIndutores,netlist[i].nome);
+      fprintf(arquivoSaida, " %s", nomesIndutores);
+    }
+  }
   fprintf(arquivoSaida, "\n");
 
   if (passosPorPonto != 1)
@@ -1349,6 +1359,11 @@ int main(void)
       fprintf(arquivoSaida," %lg", solucaoAnterior[i]);
     else
       fprintf(arquivoSaida," %lg", Yn[i][numeroVariaveis+1]);
+  }
+  for (i=1; i<numeroVariaveis; i++)
+  {
+    if (netlist[i].nome[0] == 'L')
+      fprintf(arquivoSaida, " %lg", netlist[i].jt0);
   }
   fprintf(arquivoSaida,"\n");
 
@@ -1395,10 +1410,18 @@ int main(void)
       fprintf(arquivoSaida,"%lg", tempo_atual);
       for (i=1; i<=numeroVariaveis; i++)
       {
+
         if (contadorElementosNaoLineares != 0)
           fprintf(arquivoSaida," %lg", solucaoAnterior[i]);
         else
           fprintf(arquivoSaida," %lg", Yn[i][numeroVariaveis+1]);
+      }
+      for (i=1; i<=numeroVariaveis; i++)
+      {
+        if (netlist[i].nome[0] == 'L')
+        {
+          fprintf(arquivoSaida, " %lg", netlist[i].jt0);
+        }
       }
       fprintf(arquivoSaida,"\n");
       contadorPasso = 1;
