@@ -818,7 +818,7 @@ unsigned TestarConvergenciaNR () /*teste de convergencia*/
 
 void MontarEstampasGMin() /*acho que faz sentido, tem que testar*/
 {
-  printf("Condutancia atual: %lg\n", gminAtual);
+  // printf("Condutancia atual: %lg\n", gminAtual);
   double condutancia = gminAtual;
   unsigned i, k, l, no1, no2;
   double tensao1, tensao2;
@@ -916,7 +916,7 @@ unsigned ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned i
     convergiu = TestarConvergenciaNR();
     if (convergiu == 1)
     {
-       printf("Convergiu no tempo %lg!\n", tempo);
+       // printf("Convergiu no tempo %lg!\n", tempo);
       return 1;
     }
     ArmazenarNRAnterior();
@@ -972,14 +972,14 @@ unsigned ResolverNewtonRaphson (double tempo, double passo_simulacao, unsigned i
     }
     if (fator < GMIN_MENOR_FATOR)
     {
-      printf("Nao converge nem com Gmin Stepping no tempo %lg\n", tempo);
+      // printf("Nao converge nem com Gmin Stepping no tempo %lg\n", tempo);
       fator = 10;
       return 0;
     }
-    printf("Gmin atual: %lg\n", gminAtual);
+    // printf("Gmin atual: %lg\n", gminAtual);
   } /*while gmin*/
   fator = 10;
-  printf("Convergiu com gmin no tempo t = %lg\n", tempo);
+  // printf("Convergiu com gmin no tempo t = %lg\n", tempo);
   return 1;
 
 }/*ResolverNewtonRaphson*/
@@ -1127,7 +1127,7 @@ void MontarEstampasInvariantes()
 		}
     else if (tipo == 'K')
     {
-      printf("Numero de espiras: %lg\n", netlist[i].numeroEspiras);
+      // printf("Numero de espiras: %lg\n", netlist[i].numeroEspiras);
       YnInvariantes[netlist[i].a][netlist[i].x] -= netlist[i].numeroEspiras;
 			YnInvariantes[netlist[i].b][netlist[i].x] += netlist[i].numeroEspiras;
       YnInvariantes[netlist[i].c][netlist[i].x] += 1;
@@ -1182,7 +1182,7 @@ void ListarTudo ()
   }
   getch();
   /* Monta o sistema nodal modificado */
-  printf("O circuito tem %d nos, %d variaveis e %d elementos\n",numeroNos,numeroVariaveis,numeroElementos);
+  // printf("O circuito tem %d nos, %d variaveis e %d elementos\n",numeroNos,numeroVariaveis,numeroElementos);
   getch();
 }/*ListarTudo*/
 
@@ -1229,7 +1229,7 @@ void ResolverPontoOperacao (double passo_simulacao)
   #endif
   if (contadorElementosNaoLineares == 0) /*se nao tem elementos nao lineares, resolve normalmente*/
   {
-    printf("Entra no if de nao tem elementos nao lineares\n");
+    // printf("Entra no if de nao tem elementos nao lineares\n");
     if (ResolverSistema()) /*calculo do ponto de operacao*/
     {
       getch();
@@ -1301,12 +1301,12 @@ int main(void)
   ZerarSistema();
   MontarEstampasInvariantes();
   CopiarEstampaInvariante();
-  printf("Sistema apos estampas invariantes:\n");
-  MostrarSistema();
+  // printf("Sistema apos estampas invariantes:\n");
+  // MostrarSistema();
   if (temCapacitorOuIndutor == 1 || contadorElementosNaoLineares != 0)
   {
     ResolverPontoOperacao(passo_simulacao);
-    MostrarSolucaoAtual();
+    // MostrarSolucaoAtual();
   }
 
   fprintf(arquivoSaida,"%lg", tempo_atual);
@@ -1337,7 +1337,7 @@ int main(void)
         ArmazenarResultadoAnterior();
       else
       {
-        printf("Nao convergiu nem com Gmin na vida\n");
+        printf("Nao convergiu nem com Gmin\n");
         exit(0);
       }
 
@@ -1404,7 +1404,7 @@ int main(void)
   getch();
 #endif
   /* Mostra solucao */
-  printf("Solucao:\n");
+  printf("\nSolucao:\n");
   strcpy(txt,"Tensao");
   for (i=1; i<=numeroVariaveis; i++)
   {
