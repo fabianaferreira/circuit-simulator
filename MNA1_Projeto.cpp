@@ -41,9 +41,11 @@ Os nos podem ser nomes
 #define MAX_ELEM 50
 #define MAX_NOS 50
 #define TOLG 1e-9
-#define DEBUG
+//#define DEBUG
+#define PI acos(-1.0)
+#define NOME_ARQUIVO_SAIDA "saida_simulacao.tab"
 
-typedef struct sine /* CLASSE SIN */
+typedef struct sine /* STRUCT SIN */
 {
   double nivel_dc,
          amplitude,
@@ -54,12 +56,12 @@ typedef struct sine /* CLASSE SIN */
   unsigned int ciclos;
 } sine;
 
-typedef struct dc /* CLASSE DC */
+typedef struct dc /* STRUCT DC */
 {
   double valor;
 } dc;
 
-typedef struct pulse /* CLASSE PULSE */
+typedef struct pulse /* STRUCT PULSE */
 {
   double amplitude1,
          amplitude2,
@@ -71,7 +73,7 @@ typedef struct pulse /* CLASSE PULSE */
   unsigned int ciclos;
 } pulse;
 
- /*Elemento possui atributos de fontes, pois há tipos diferentes, com parametros diferentes*/
+/*Elemento possui atributos de fontes, pois há tipos diferentes, com parametros diferentes*/
 typedef struct elemento /* Elemento do netlist */
 {
   char nome[MAX_NOME];
@@ -82,6 +84,7 @@ typedef struct elemento /* Elemento do netlist */
   dc fonte_dc;
   pulse fonte_pulso;
 } elemento;
+
 /*As seguintes variaveis vao definir os passos e o tempo de simulacao a ser usado
   Como o passo a ser escrito no arquivo de saida pode nao ser o mesmo do passo da
   integracao, vamos definir os dois separadamente*/
@@ -89,6 +92,7 @@ double tempo_simulacao, passo_simulacao, passo_saida;
 double tempo_atual;
 
 elemento netlist[MAX_ELEM]; /* Netlist */
+int fontes_variantes[MAX_ELEM];
 
 int
   numeroElementos, /* Elementos */
@@ -109,7 +113,8 @@ FILE *arquivo;
 
 double
   g,
-  Yn[MAX_NOS+1][MAX_NOS+2];
+  Yn[MAX_NOS+1][MAX_NOS+2],
+  YnAnterior[MAX_NOS+1][MAX_NOS+2];
 
 /*  Rotina para Resolucao de sistema de equacoes lineares.
    Metodo de Gauss-Jordan com condensacao pivotal */
@@ -173,9 +178,46 @@ int NumerarNo(char *nome)
   }
 }
 
-/* Rotina que monta as estampas do circuito para cálculo de ponto de operação (Análise DC) */
-void MontarEstampasPontoOp()
+void ArmazenarResultadoAnterior()
 {
+  for (i=0; i<=numeroVariaveis; i++)
+  {
+    for (j=0; j<=numeroVariaveis+1; j++)
+      YnAnterior[i][j] = Yn[i][j];
+  }
+}
+
+void ZerarSistema()
+{
+  for (i=0; i<=numeroVariaveis; i++)
+  {
+    for (j=0; j<=numeroVariaveis+1; j++)
+      Yn[i][j]=0;
+  }
+}
+
+/* Rotina que monta as estampas do circuito */
+void MontarEstampas(double tempo, int pontoOp)
+{
+  unsigned ciclos, ciclos_passados;
+  elemento fonte_atual;
+  double amplitude,
+         amplitude1,
+         amplitude2,
+         nivel_dc,
+         atraso,
+         freq,
+         defasagem,
+         amortecimento,
+         tempo_subida,
+         tempo_descida,
+         tempo_ligada,
+         periodo,
+         tempo_normalizado;
+    double coefAng,
+           coefLin,
+           t1,
+           t2;
 	for (i=1; i<=numeroElementos; i++)
 	{
 		tipo=netlist[i].nome[0];
@@ -214,22 +256,148 @@ void MontarEstampasPontoOp()
 			Yn[netlist[i].a][netlist[i].d] -= g;
 			Yn[netlist[i].b][netlist[i].c] -= g;
 		}
-    /*Monta a estampa apenas se a fonte for DC*/
-    else if (tipo=='I' && (strcmp(netlist[i].tipo_fonte, "DC") == 0))
+    else if (tipo=='I')
     {
-      g=netlist[i].fonte_dc.valor;
-      Yn[netlist[i].a][numeroVariaveis+1]-=g;
-      Yn[netlist[i].b][numeroVariaveis+1]+=g;
+      fonte_atual = netlist[i];
+      if (strcmp(fonte_atual.tipo_fonte, "SIN") == 0)
+      {
+        amplitude = fonte_atual.fonte_seno.amplitude;
+        freq = fonte_atual.fonte_seno.freq;
+        atraso = fonte_atual.fonte_seno.atraso;
+        defasagem = fonte_atual.fonte_seno.defasagem;
+        nivel_dc = fonte_atual.fonte_seno.nivel_dc;
+        amortecimento = fonte_atual.fonte_seno.amortecimento;
+        ciclos = fonte_atual.fonte_seno.ciclos;
+        fonte_atual.valor = nivel_dc +
+                            amplitude*(exp(-amortecimento*(tempo - atraso)))*(sin(2*PI*freq*(tempo - atraso) + (PI*defasagem)/180));
+      }
+      else if (strcmp(netlist[i].tipo_fonte, "PULSE") == 0)
+      {
+        amplitude1 = fonte_atual.fonte_pulso.amplitude1;
+        amplitude2 = fonte_atual.fonte_pulso.amplitude2;
+        atraso = fonte_atual.fonte_pulso.atraso;
+        tempo_subida = fonte_atual.fonte_pulso.tempo_subida;
+        tempo_descida = fonte_atual.fonte_pulso.tempo_descida;
+        ciclos = fonte_atual.fonte_pulso.ciclos;
+        periodo = fonte_atual.fonte_pulso.periodo;
+        tempo_ligada = fonte_atual.fonte_pulso.tempo_ligada;
+        ciclos_passados = unsigned(tempo/periodo);
+
+        /*Tratando descontinuidades*/
+        if (tempo_subida == 0)
+          tempo_descida = passo_simulacao;
+        if (tempo_descida == 0)
+          tempo_subida = passo_simulacao;
+
+        tempo_normalizado = tempo - periodo*ciclos_passados;
+        /*Falta o que fazer quando tá terminando*/
+        /*Achando o valor da fonte no tempo atual*/
+        if (ciclos_passados >= ciclos)
+          fonte_atual.valor = amplitude1;
+        else if (tempo_normalizado <= atraso)
+          fonte_atual.valor = amplitude1;
+        else if (tempo_normalizado <= tempo_subida + atraso)
+        {
+          /*Achando a equacao da reta de subida*/
+          t1 = atraso;
+          t2 = atraso + tempo_subida;
+          coefAng = (amplitude2 - amplitude1)/(t2 - t1);
+          coefLin = amplitude1 - coefAng*t1;
+          fonte_atual.valor = coefAng*tempo + coefLin; /*????????????*/
+        }
+        else if (tempo_normalizado <= atraso + tempo_subida + tempo_ligada)
+          fonte_atual.valor = amplitude2;
+        else if (tempo_normalizado <= periodo)
+        {
+          /*Achando a equacao da reta de descida*/
+          t1 = atraso + tempo_subida + tempo_ligada;
+          t2 = t1 + tempo_descida;
+          coefAng = (amplitude1 - amplitude2)/(t1 - t2);
+          coefLin = amplitude1 - coefAng*t1;
+          fonte_atual.valor = coefAng*tempo + coefLin;
+        }
+      }
+      else
+      {
+        fonte_atual.valor = fonte_atual.fonte_dc.valor;
+      }
+      g=fonte_atual.valor;
+      Yn[fonte_atual.a][numeroVariaveis+1]-=g;
+      Yn[fonte_atual.b][numeroVariaveis+1]+=g;
     }
 
     /*Monta a estampa apenas se a fonte for DC*/
-    else if (tipo=='V' && (strcmp(netlist[i].tipo_fonte, "DC") == 0))
+    else if (tipo=='V')
     {
-      Yn[netlist[i].a][netlist[i].x]+=1;
-      Yn[netlist[i].b][netlist[i].x]-=1;
-      Yn[netlist[i].x][netlist[i].a]-=1;
-      Yn[netlist[i].x][netlist[i].b]+=1;
-      Yn[netlist[i].x][numeroVariaveis+1]-=netlist[i].fonte_dc.valor;
+      fonte_atual = netlist[i];
+      if (strcmp(fonte_atual.tipo_fonte, "SIN") == 0)
+      {
+        amplitude = fonte_atual.fonte_seno.amplitude;
+        freq = fonte_atual.fonte_seno.freq;
+        atraso = fonte_atual.fonte_seno.atraso;
+        defasagem = fonte_atual.fonte_seno.defasagem;
+        nivel_dc = fonte_atual.fonte_seno.nivel_dc;
+        amortecimento = fonte_atual.fonte_seno.amortecimento;
+        ciclos = fonte_atual.fonte_seno.ciclos;
+        fonte_atual.valor = nivel_dc +
+                            amplitude*(exp(-amortecimento*(tempo - atraso)))*(sin(2*PI*freq*(tempo - atraso) + (PI*defasagem)/180));
+      }
+      else if (strcmp(fonte_atual.tipo_fonte, "PULSE") == 0)
+      {
+        amplitude1 = fonte_atual.fonte_pulso.amplitude1;
+        amplitude2 = fonte_atual.fonte_pulso.amplitude2;
+        atraso = fonte_atual.fonte_pulso.atraso;
+        tempo_subida = fonte_atual.fonte_pulso.tempo_subida;
+        tempo_descida = fonte_atual.fonte_pulso.tempo_descida;
+        ciclos = fonte_atual.fonte_pulso.ciclos;
+        periodo = fonte_atual.fonte_pulso.periodo;
+        tempo_ligada = fonte_atual.fonte_pulso.tempo_ligada;
+        ciclos_passados = unsigned(tempo/periodo);
+
+        /*Tratando descontinuidades*/
+        if (tempo_subida == 0)
+          tempo_descida = passo_simulacao;
+        if (tempo_descida == 0)
+          tempo_subida = passo_simulacao;
+
+        tempo_normalizado = tempo - periodo*ciclos_passados;
+        /*Falta o que fazer quando tá terminando*/
+        /*Achando o valor da fonte no tempo atual*/
+        if (ciclos_passados >= ciclos)
+          fonte_atual.valor = amplitude1;
+        else if (tempo_normalizado <= atraso)
+          fonte_atual.valor = amplitude1;
+        else if (tempo_normalizado <= tempo_subida + atraso)
+        {
+          /*Achando a equacao da reta de subida*/
+          t1 = atraso;
+          t2 = atraso + tempo_subida;
+          coefAng = (amplitude2 - amplitude1)/(t2 - t1);
+          coefLin = amplitude1 - coefAng*t1;
+          fonte_atual.valor = coefAng*tempo + coefLin; /*????????????*/
+        }
+        else if (tempo_normalizado <= atraso + tempo_subida + tempo_ligada)
+          fonte_atual.valor = amplitude2;
+        else if (tempo_normalizado <= periodo)
+        {
+          /*Achando a equacao da reta de descida*/
+          t1 = atraso + tempo_subida + tempo_ligada;
+          t2 = t1 + tempo_descida;
+          coefAng = (amplitude1 - amplitude2)/(t1 - t2);
+          coefLin = amplitude1 - coefAng*t1;
+          fonte_atual.valor = coefAng*tempo + coefLin;
+        }
+      }
+      else
+      {
+        fonte_atual.valor = fonte_atual.fonte_dc.valor;
+      }
+      g=fonte_atual.valor;
+      Yn[fonte_atual.a][fonte_atual.x]+=1;
+      Yn[fonte_atual.b][fonte_atual.x]-=1;
+      Yn[fonte_atual.x][fonte_atual.a]-=1;
+      Yn[fonte_atual.x][fonte_atual.b]+=1;
+      Yn[fonte_atual.x][numeroVariaveis+1]-=g;
     }
 		else if (tipo=='E')
 		{
@@ -289,6 +457,7 @@ void MontarEstampasPontoOp()
 
 int main(void)
 {
+  unsigned contador_fontes_variantes = 0;
   system("cls");
   printf("Programa demonstrativo de analise nodal modificada no dominio do tempo\n\n");
   printf("Desenvolvido por: - Fabiana Ferreira Fonseca \n");
@@ -372,6 +541,8 @@ int main(void)
                 &netlist[numeroElementos].fonte_seno.amplitude, &netlist[numeroElementos].fonte_seno.freq,
                 &netlist[numeroElementos].fonte_seno.atraso, &netlist[numeroElementos].fonte_seno.amortecimento,
                 &netlist[numeroElementos].fonte_seno.defasagem, &netlist[numeroElementos].fonte_seno.ciclos);
+        fontes_variantes[contador_fontes_variantes] = numeroElementos;
+        contador_fontes_variantes++;
       }
       else if (strcmp(netlist[numeroElementos].tipo_fonte, "PULSE") == 0)
       {
@@ -381,6 +552,8 @@ int main(void)
                 &netlist[numeroElementos].fonte_pulso.tempo_subida, &netlist[numeroElementos].fonte_pulso.tempo_descida,
                 &netlist[numeroElementos].fonte_pulso.tempo_ligada, &netlist[numeroElementos].fonte_pulso.periodo,
                 &netlist[numeroElementos].fonte_pulso.ciclos);
+        fontes_variantes[contador_fontes_variantes] = numeroElementos;
+        contador_fontes_variantes++;
       }
       netlist[numeroElementos].a=NumerarNo(na);
       netlist[numeroElementos].b=NumerarNo(nb);
@@ -433,13 +606,19 @@ int main(void)
       printf("Comentario: %s",txt);
       numeroElementos--;
     }
+
     /*Atribuindo os valores dos passos de integracao e de escrita no arquivo de saida,
       alem do tempo total de simulacao definido no netlist*/
-    else if (tipo=='.') /* .TRAN */
+    else if (tipo == '.')
     {
-      sscanf(p, "%lg%lg%*10s%lg", &tempo_simulacao, &passo_simulacao, &passo_saida);
-      printf("%lg %lg %lg\n", tempo_simulacao, passo_simulacao, passo_saida);
+      if (strcmp (netlist[numeroElementos].nome, ".TRAN") == 0)
+      {
+        sscanf(p, "%lg%lg%*10s%lg", &tempo_simulacao, &passo_simulacao, &passo_saida);
+        printf("%lg %lg %lg\n", tempo_simulacao, passo_simulacao, passo_saida);
+      }
+      numeroElementos--;
     }
+
     else
     {
       printf("Elemento desconhecido: %s\n",txt);
@@ -511,33 +690,44 @@ int main(void)
   /* Monta o sistema nodal modificado */
   printf("O circuito tem %d nos, %d variaveis e %d elementos\n",numeroNos,numeroVariaveis,numeroElementos);
   getch();
-  /* Zera sistema */
-  for (i=0; i<=numeroVariaveis; i++)
-  {
-    for (j=0; j<=numeroVariaveis+1; j++)
-      Yn[i][j]=0;
-  }
 
-  /* Montar Estampas para análise de Ponto de Operação */
-  MontarEstampasPontoOp();
-  /* Resolve o sistema */
-  if (ResolverSistema())
+  FILE *arquivoSaida = fopen(NOME_ARQUIVO_SAIDA, "w");
+  /*Escreve o header do arquivo de saida*/
+  strcpy(txt,"");
+  fprintf(arquivoSaida, "%s", "t");
+  for (i=1; i<=numeroVariaveis; i++)
   {
-    getch();
-    exit(0);
+    //if (i==numeroNos+1) strcpy(txt,"j");
+    fprintf(arquivoSaida, " %s%s", txt, lista[i]);
   }
-    /*Agora, precisamos fazer a analise no tempo. Porem, as fontes SINE e PULSE tem valores
-      que dependem do tempo de simulacao e do passo de integracao. Assim, as estampas das mesmas
-      tem que ser montadas dentro de um loop que ira resolver o sistema para cada tempo diferente.
-      Dessa forma, todas as estampas que nao dependem do tempo podem ser montadas antes, como esta
-      sendo feita, mas, a partir daqui, iremos montar as estampas dependentes e resolver o sistema*/
-    for (tempo_atual = 0; tempo_atual < tempo_simulacao; tempo_atual += passo_simulacao)
+  fprintf(arquivoSaida, "\n");
+
+  /*Analise no tempo*/
+  for (tempo_atual = 0; tempo_atual < tempo_simulacao; tempo_atual += passo_simulacao)
+  {
+    ZerarSistema();
+    MontarEstampas(tempo_atual, 0);
+
+    /*Newton-Raphson para tempo atual com o ResolverSistema() varias vezes ate convergir*/
+
+    /* Resolve o sistema */
+    if (ResolverSistema())
     {
-      /*Vou definir uma funcao que vai alterar as estampas dos elementos variantes no tempo.
-        Vai ser criado um vetor que, ao ler da netlist, vai conter os elementos que variam no
-        tempo (no caso inicial, as fontes), para que, ao montar as estampas de tempos em tempos,
-        o processo seja otimizado e não monte as estampas dos elementos que não sofrem variacao*/
+      getch();
+      exit(0);
     }
+
+    /*Escreve no arquivo de saida*/
+    fprintf(arquivoSaida,"%lg", tempo_atual);
+    for (i=1; i<=numeroVariaveis; i++)
+    {
+      fprintf(arquivoSaida," %lg", Yn[i][numeroVariaveis+1]);
+    }
+    fprintf(arquivoSaida,"\n");
+  }/*for analise no tempo*/
+
+  /*Fecha arquivo*/
+  fclose(arquivoSaida);
 
 #ifdef DEBUG
   /* Opcional: Mostra o sistema resolvido */
